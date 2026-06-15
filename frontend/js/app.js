@@ -7,26 +7,14 @@ let busy = false;
 document.getElementById('dateChip').textContent = todayStr();
 
 async function boot() {
-  const params = new URLSearchParams(location.search);
-  const wanted = params.get('q');
-  const questions = await api('api/questions');
-
-  if (!questions.length) { show('empty'); return; }
-
-  if (wanted) {
-    QID = Number(wanted);
-  } else if (questions.length === 1) {
-    QID = questions[0].id;
-  } else {
-    renderPicker(questions);
-    show('picker');
-    return;
-  }
+  const wanted = new URLSearchParams(location.search).get('q');
+  if (!wanted) { show('nolink'); return; }   // no catalog — a link is required
+  QID = Number(wanted);
   startSurvey();
 }
 
 function show(id) {
-  ['picker', 'captchaView', 'surveyView', 'empty'].forEach((x) =>
+  ['nolink', 'captchaView', 'surveyView', 'empty'].forEach((x) =>
     document.getElementById(x).classList.toggle('hidden', x !== id));
 }
 
@@ -68,22 +56,19 @@ function startSurvey() {
   showCaptcha(loadSurvey);
 }
 
-function renderPicker(questions) {
-  document.getElementById('pickerList').innerHTML = questions.map((q) => `
-    <div class="qlist-item">
-      <div>
-        <div style="font-weight:700">${esc(q.title)}</div>
-        <div class="meta">${q.idea_count} alternativ</div>
-      </div>
-      <a class="btn sm" href="?q=${q.id}">Rösta →</a>
-    </div>`).join('');
-}
-
 async function loadSurvey() {
-  question = await api('api/questions/' + QID);
+  try {
+    question = await api('api/questions/' + QID);
+  } catch (e) {
+    return show('nolink');   // unknown/invalid poll id
+  }
   document.getElementById('qTitle').textContent = question.title;
   document.getElementById('qDesc').textContent = question.description || '';
   document.getElementById('suggestBtn').classList.toggle('hidden', !question.allow_suggestions);
+  // Keep result links pointing at THIS poll.
+  const rh = 'results?q=' + QID;
+  const rl = document.getElementById('resultsLink'); if (rl) rl.href = rh;
+  const nr = document.getElementById('navResults'); if (nr) nr.href = rh;
   show('surveyView');
   await nextPair();
 }

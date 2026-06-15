@@ -4,13 +4,15 @@ const crypto = require('node:crypto');
 const QRCode = require('qrcode');
 const svgCaptcha = require('svg-captcha');
 
-const { pool, init } = require('./db');
+const { pool, init, migrate } = require('./db');
 const { decorate, choosePair } = require('./scoring');
-const { login, requireAdmin, issueHuman, checkHuman } = require('./auth');
+const { login, requireAdmin, issueHuman, checkHuman, issueUser, requireUser } = require('./auth');
+const { sendMagicLink } = require('./mailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/$/, ''); // e.g. https://app.sambruk.se/ideas
 
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb' }));
@@ -25,6 +27,7 @@ app.get('/', sendPage('index.html'));
 app.get('/results', sendPage('results.html'));
 app.get('/admin', sendPage('admin.html'));
 app.get('/share', sendPage('share.html'));
+app.get('/skapa', sendPage('skapa.html'));
 
 // Public-facing base URL as seen through the reverse proxy (works on any domain).
 function publicBase(req) {
@@ -123,19 +126,8 @@ app.get('/api/qr.svg', wrap(async (req, res) => {
   res.send(svg);
 }));
 
-// Active questions (for the public landing / selector).
-app.get('/api/questions', wrap(async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT q.id, q.title, q.description, q.allow_suggestions,
-            count(i.*) FILTER (WHERE i.status = 'approved') AS idea_count
-       FROM questions q
-       LEFT JOIN ideas i ON i.question_id = q.id
-      WHERE q.status = 'active'
-      GROUP BY q.id
-      ORDER BY q.created_at DESC`
-  );
-  res.json(rows);
-}));
+// NOTE: there is intentionally NO endpoint that lists/enumerates polls.
+// Every poll is reachable only via its own shared link (?q=ID) — no catalog.
 
 // One question's metadata.
 app.get('/api/questions/:id', wrap(async (req, res) => {
@@ -299,6 +291,19 @@ app.post('/api/admin/login', wrap(async (req, res) => {
   res.json({ token });
 }));
 
+// Admin only manages the OFFICIAL polls it created (owner_id IS NULL),
+// never polls owned by user accounts.
+async function isOfficialQuestion(qid) {
+  const { rows } = await pool.query(`SELECT id FROM questions WHERE id = $1 AND owner_id IS NULL`, [qid]);
+  return rows.length > 0;
+}
+async function isOfficialIdea(ideaId) {
+  const { rows } = await pool.query(
+    `SELECT i.id FROM ideas i JOIN questions q ON q.id = i.question_id
+      WHERE i.id = $1 AND q.owner_id IS NULL`, [ideaId]);
+  return rows.length > 0;
+}
+
 app.get('/api/admin/questions', requireAdmin, wrap(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT q.*,
@@ -307,6 +312,7 @@ app.get('/api/admin/questions', requireAdmin, wrap(async (req, res) => {
             (SELECT count(*) FROM votes v WHERE v.question_id = q.id AND v.skipped = FALSE) AS vote_count
        FROM questions q
        LEFT JOIN ideas i ON i.question_id = q.id
+      WHERE q.owner_id IS NULL
       GROUP BY q.id
       ORDER BY q.created_at DESC`
   );
@@ -333,6 +339,7 @@ app.post('/api/admin/questions', requireAdmin, wrap(async (req, res) => {
 }));
 
 app.patch('/api/admin/questions/:id', requireAdmin, wrap(async (req, res) => {
+  if (!await isOfficialQuestion(req.params.id)) return res.status(404).json({ error: 'Not found' });
   const { title, description, status, allow_suggestions } = req.body || {};
   const { rows } = await pool.query(
     `UPDATE questions SET
@@ -349,12 +356,14 @@ app.patch('/api/admin/questions/:id', requireAdmin, wrap(async (req, res) => {
 }));
 
 app.delete('/api/admin/questions/:id', requireAdmin, wrap(async (req, res) => {
+  if (!await isOfficialQuestion(req.params.id)) return res.status(404).json({ error: 'Not found' });
   await pool.query(`DELETE FROM questions WHERE id = $1`, [req.params.id]);
   res.json({ ok: true });
 }));
 
 // Reset all votes/scores for a question (keeps the alternatives). For test runs.
 app.post('/api/admin/questions/:id/reset', requireAdmin, wrap(async (req, res) => {
+  if (!await isOfficialQuestion(req.params.id)) return res.status(404).json({ error: 'Not found' });
   const qid = req.params.id;
   const client = await pool.connect();
   try {
@@ -375,6 +384,7 @@ app.post('/api/admin/questions/:id/reset', requireAdmin, wrap(async (req, res) =
 
 // Add seed ideas to an existing question (approved immediately).
 app.post('/api/admin/questions/:id/ideas', requireAdmin, wrap(async (req, res) => {
+  if (!await isOfficialQuestion(req.params.id)) return res.status(404).json({ error: 'Not found' });
   const texts = parseIdeas(req.body.texts);
   for (const text of texts) {
     await pool.query(
@@ -387,6 +397,7 @@ app.post('/api/admin/questions/:id/ideas', requireAdmin, wrap(async (req, res) =
 
 // List ideas for moderation / management.
 app.get('/api/admin/questions/:id/ideas', requireAdmin, wrap(async (req, res) => {
+  if (!await isOfficialQuestion(req.params.id)) return res.status(404).json({ error: 'Not found' });
   const status = req.query.status;
   const params = [req.params.id];
   let sql = `SELECT * FROM ideas WHERE question_id = $1`;
@@ -398,6 +409,7 @@ app.get('/api/admin/questions/:id/ideas', requireAdmin, wrap(async (req, res) =>
 
 // Approve / reject / edit a single idea.
 app.patch('/api/admin/ideas/:id', requireAdmin, wrap(async (req, res) => {
+  if (!await isOfficialIdea(req.params.id)) return res.status(404).json({ error: 'Not found' });
   const { status, text } = req.body || {};
   const { rows } = await pool.query(
     `UPDATE ideas SET
@@ -411,12 +423,14 @@ app.patch('/api/admin/ideas/:id', requireAdmin, wrap(async (req, res) => {
 }));
 
 app.delete('/api/admin/ideas/:id', requireAdmin, wrap(async (req, res) => {
+  if (!await isOfficialIdea(req.params.id)) return res.status(404).json({ error: 'Not found' });
   await pool.query(`DELETE FROM ideas WHERE id = $1`, [req.params.id]);
   res.json({ ok: true });
 }));
 
 // Export results.
 app.get('/api/admin/questions/:id/export', requireAdmin, wrap(async (req, res) => {
+  if (!await isOfficialQuestion(req.params.id)) return res.status(404).json({ error: 'Not found' });
   const { rows } = await pool.query(
     `SELECT * FROM ideas WHERE question_id = $1 AND status = 'approved'`, [req.params.id]
   );
@@ -433,6 +447,202 @@ app.get('/api/admin/questions/:id/export', requireAdmin, wrap(async (req, res) =
   res.json(ideas);
 }));
 
+// =====================================================================
+// AUTH — passwordless magic-link accounts
+// =====================================================================
+
+// Stricter limiter for login-email requests (anti-spam): 6 / min / IP.
+const authRl = new Map();
+function authLimit(req, res, next) {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  let rec = authRl.get(ip);
+  if (!rec || rec.reset < now) { rec = { count: 0, reset: now + 60000 }; authRl.set(ip, rec); }
+  if (++rec.count > 6) return res.status(429).json({ error: 'För många försök — vänta en minut.' });
+  next();
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Request a magic link.
+app.post('/api/auth/request', authLimit, wrap(async (req, res) => {
+  const email = String((req.body || {}).email || '').trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Ogiltig e-postadress' });
+
+  const token = crypto.randomBytes(32).toString('hex');
+  await pool.query(
+    `INSERT INTO login_tokens (token, email, exp) VALUES ($1, $2, now() + interval '30 minutes')`,
+    [token, email]
+  );
+  const base = PUBLIC_URL || publicBase(req);
+  const link = `${base}/skapa?token=${token}`;
+  try { await sendMagicLink(email, link); }
+  catch (e) { console.error('[mailer] send failed:', e.message); }
+  res.json({ ok: true });
+}));
+
+// Verify a magic link -> issue a 30-day user session token.
+app.post('/api/auth/verify', wrap(async (req, res) => {
+  const token = String((req.body || {}).token || '');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT email FROM login_tokens WHERE token = $1 AND used = FALSE AND exp > now() FOR UPDATE`,
+      [token]
+    );
+    if (!rows[0]) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Länken är ogiltig eller har gått ut.' }); }
+    const email = rows[0].email;
+    await client.query(`UPDATE login_tokens SET used = TRUE WHERE token = $1`, [token]);
+    const { rows: u } = await client.query(
+      `INSERT INTO users (email, last_login_at) VALUES ($1, now())
+       ON CONFLICT (email) DO UPDATE SET last_login_at = now()
+       RETURNING id, email`,
+      [email]
+    );
+    await client.query('COMMIT');
+    res.json({ token: issueUser(u[0]), email: u[0].email });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}));
+
+app.get('/api/auth/me', requireUser, (req, res) => res.json({ email: req.user.email }));
+
+// =====================================================================
+// USER — manage your OWN polls (owner-scoped)
+// =====================================================================
+
+async function ownsQuestion(qid, uid) {
+  const { rows } = await pool.query(`SELECT id FROM questions WHERE id = $1 AND owner_id = $2`, [qid, uid]);
+  return rows.length > 0;
+}
+async function ownsIdea(ideaId, uid) {
+  const { rows } = await pool.query(
+    `SELECT i.id FROM ideas i JOIN questions q ON q.id = i.question_id WHERE i.id = $1 AND q.owner_id = $2`,
+    [ideaId, uid]
+  );
+  return rows.length > 0;
+}
+
+app.get('/api/user/questions', requireUser, wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT q.*,
+            count(i.*) FILTER (WHERE i.status = 'approved') AS approved_count,
+            count(i.*) FILTER (WHERE i.status = 'pending')  AS pending_count,
+            (SELECT count(*) FROM votes v WHERE v.question_id = q.id AND v.skipped = FALSE) AS vote_count
+       FROM questions q
+       LEFT JOIN ideas i ON i.question_id = q.id
+      WHERE q.owner_id = $1
+      GROUP BY q.id
+      ORDER BY q.created_at DESC`,
+    [req.user.uid]
+  );
+  res.json(rows);
+}));
+
+app.post('/api/user/questions', requireUser, wrap(async (req, res) => {
+  const { title, description, allow_suggestions, status, seeds } = req.body || {};
+  if (!title || !title.trim()) return res.status(400).json({ error: 'title required' });
+  const { rows } = await pool.query(
+    `INSERT INTO questions (owner_id, title, description, allow_suggestions, status)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [req.user.uid, title.trim(), (description || '').trim(), allow_suggestions !== false, status || 'active']
+  );
+  const q = rows[0];
+  for (const text of parseIdeas(seeds)) {
+    await pool.query(`INSERT INTO ideas (question_id, text, status, source) VALUES ($1,$2,'approved','seed')`,
+      [q.id, text.slice(0, 1000)]);
+  }
+  res.json(q);
+}));
+
+app.patch('/api/user/questions/:id', requireUser, wrap(async (req, res) => {
+  if (!await ownsQuestion(req.params.id, req.user.uid)) return res.status(404).json({ error: 'Not found' });
+  const { title, description, status, allow_suggestions } = req.body || {};
+  const { rows } = await pool.query(
+    `UPDATE questions SET title = COALESCE($2, title), description = COALESCE($3, description),
+       status = COALESCE($4, status), allow_suggestions = COALESCE($5, allow_suggestions)
+     WHERE id = $1 RETURNING *`,
+    [req.params.id, title, description, status, typeof allow_suggestions === 'boolean' ? allow_suggestions : null]
+  );
+  res.json(rows[0]);
+}));
+
+app.delete('/api/user/questions/:id', requireUser, wrap(async (req, res) => {
+  if (!await ownsQuestion(req.params.id, req.user.uid)) return res.status(404).json({ error: 'Not found' });
+  await pool.query(`DELETE FROM questions WHERE id = $1`, [req.params.id]);
+  res.json({ ok: true });
+}));
+
+app.post('/api/user/questions/:id/reset', requireUser, wrap(async (req, res) => {
+  if (!await ownsQuestion(req.params.id, req.user.uid)) return res.status(404).json({ error: 'Not found' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const del = await client.query(`DELETE FROM votes WHERE question_id = $1`, [req.params.id]);
+    await client.query(`UPDATE ideas SET wins = 0, losses = 0, appearances = 0 WHERE question_id = $1`, [req.params.id]);
+    await client.query('COMMIT');
+    res.json({ ok: true, clearedVotes: del.rowCount });
+  } catch (err) { await client.query('ROLLBACK'); throw err; } finally { client.release(); }
+}));
+
+app.post('/api/user/questions/:id/ideas', requireUser, wrap(async (req, res) => {
+  if (!await ownsQuestion(req.params.id, req.user.uid)) return res.status(404).json({ error: 'Not found' });
+  const texts = parseIdeas(req.body.texts);
+  for (const text of texts) {
+    await pool.query(`INSERT INTO ideas (question_id, text, status, source) VALUES ($1,$2,'approved','seed')`,
+      [req.params.id, text.slice(0, 1000)]);
+  }
+  res.json({ ok: true, added: texts.length });
+}));
+
+app.get('/api/user/questions/:id/ideas', requireUser, wrap(async (req, res) => {
+  if (!await ownsQuestion(req.params.id, req.user.uid)) return res.status(404).json({ error: 'Not found' });
+  const params = [req.params.id];
+  let sql = `SELECT * FROM ideas WHERE question_id = $1`;
+  if (req.query.status) { sql += ` AND status = $2`; params.push(req.query.status); }
+  sql += ` ORDER BY created_at DESC`;
+  const { rows } = await pool.query(sql, params);
+  res.json(rows.map((i) => ({ ...decorate(i), status: i.status, source: i.source, created_at: i.created_at })));
+}));
+
+app.patch('/api/user/ideas/:id', requireUser, wrap(async (req, res) => {
+  if (!await ownsIdea(req.params.id, req.user.uid)) return res.status(404).json({ error: 'Not found' });
+  const { status, text } = req.body || {};
+  const { rows } = await pool.query(
+    `UPDATE ideas SET status = COALESCE($2, status), text = COALESCE($3, text) WHERE id = $1 RETURNING *`,
+    [req.params.id, status, text ? text.trim().slice(0, 1000) : null]
+  );
+  res.json(rows[0]);
+}));
+
+app.delete('/api/user/ideas/:id', requireUser, wrap(async (req, res) => {
+  if (!await ownsIdea(req.params.id, req.user.uid)) return res.status(404).json({ error: 'Not found' });
+  await pool.query(`DELETE FROM ideas WHERE id = $1`, [req.params.id]);
+  res.json({ ok: true });
+}));
+
+app.get('/api/user/questions/:id/export', requireUser, wrap(async (req, res) => {
+  if (!await ownsQuestion(req.params.id, req.user.uid)) return res.status(404).json({ error: 'Not found' });
+  const { rows } = await pool.query(
+    `SELECT * FROM ideas WHERE question_id = $1 AND status = 'approved'`, [req.params.id]);
+  const ideas = rows.map(decorate).sort((a, b) => b.score - a.score);
+  if (req.query.format === 'csv') {
+    const header = 'rank,idea,score,wins,losses,votes\n';
+    const body = ideas.map((i, n) =>
+      `${n + 1},"${i.text.replace(/"/g, '""')}",${i.score},${i.wins},${i.losses},${i.votes}`).join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="results-${req.params.id}.csv"`);
+    return res.send(header + body);
+  }
+  res.json(ideas);
+}));
+
 init()
-  .then(() => app.listen(PORT, () => console.log(`[hackaton-ideas] listening on ${PORT}`)))
+  .then(migrate)
+  .then(() => app.listen(PORT, () => console.log(`[omrostning] listening on ${PORT}`)))
   .catch((err) => { console.error('Startup failed', err); process.exit(1); });

@@ -10,10 +10,9 @@
   <div class="topbar">
     <div class="brand"><img src="assets/sambruk-logo.png" class="logo" alt="Sambruk"> Omröstning</div>
     <nav class="topnav">
-      <a href=".">Rösta</a>
+      <a href="." id="navRosta">Rösta</a>
       <a href="results" class="active">Resultat</a>
-      <a href="share">Dela</a>
-      <a href="admin">Admin</a>
+      <a href="skapa">Skapa</a>
       <button onclick="toggleTheme()" title="Byt tema">◐</button>
     </nav>
   </div>
@@ -25,16 +24,16 @@
       <div class="datechip" id="dateChip"></div>
     </div>
 
-    <div id="picker" class="card hidden">
-      <h2>Välj en omröstning</h2>
-      <div id="pickerList"></div>
+    <div id="nolink" class="card center hidden" style="max-width:480px;margin:20px auto">
+      <h2>Öppna via din länk</h2>
+      <p class="muted">Resultat nås bara via länken till en specifik omröstning.</p>
     </div>
 
     <div id="board">
       <div class="card">
         <div class="row" style="justify-content:space-between">
           <div><strong id="totalVotes">0</strong> <span class="muted">röster totalt</span></div>
-          <a class="btn sm ghost" href=".">← Rösta mer</a>
+          <a class="btn sm ghost" href="." id="voteMoreLink">← Rösta mer</a>
         </div>
       </div>
       <div class="card" id="ranking"><p class="muted center">Laddar…</p></div>

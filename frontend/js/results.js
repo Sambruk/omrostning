@@ -3,28 +3,26 @@ document.getElementById('dateChip').textContent = todayStr();
 
 async function boot() {
   const wanted = new URLSearchParams(location.search).get('q');
-  const questions = await api('api/questions');
-  if (!questions.length) {
-    document.getElementById('ranking').innerHTML = '<p class="muted center">Inga aktiva omröstningar.</p>';
+  if (!wanted) {                                   // no catalog — a link is required
+    document.getElementById('board').classList.add('hidden');
+    document.getElementById('nolink').classList.remove('hidden');
     return;
   }
-  if (wanted) QID = Number(wanted);
-  else if (questions.length === 1) QID = questions[0].id;
-  else { renderPicker(questions); document.getElementById('picker').classList.remove('hidden'); document.getElementById('board').classList.add('hidden'); return; }
-
-  const q = questions.find((x) => x.id === QID) || await api('api/questions/' + QID);
+  QID = Number(wanted);
+  let q;
+  try { q = await api('api/questions/' + QID); }
+  catch (e) {
+    document.getElementById('board').classList.add('hidden');
+    document.getElementById('nolink').classList.remove('hidden');
+    return;
+  }
   document.getElementById('qTitle').textContent = q.title;
   document.getElementById('qDesc').textContent = q.description || '';
+  // Keep "rösta"-links pointing at THIS poll (back to the vote page).
+  document.getElementById('voteMoreLink').href = '.?q=' + QID;
+  document.getElementById('navRosta').href = '.?q=' + QID;
   await refresh();
   setInterval(refresh, 5000);
-}
-
-function renderPicker(questions) {
-  document.getElementById('pickerList').innerHTML = questions.map((q) => `
-    <div class="qlist-item">
-      <div><div style="font-weight:700">${esc(q.title)}</div><div class="meta">${q.idea_count} alternativ</div></div>
-      <a class="btn sm" href="?q=${q.id}">Visa →</a>
-    </div>`).join('');
 }
 
 async function refresh() {

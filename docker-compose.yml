@@ -28,6 +28,12 @@ services:
       DATABASE_URL: postgresql://ideas:${DB_PASSWORD}@172.17.0.1:14533/ideas
       TOKEN_SECRET: ${TOKEN_SECRET}
       ADMIN_PASSWORD: ${IDEAS_ADMIN_PASSWORD}
+      SMTP_HOST: "sambruk-postal-u917.vm.elestio.app"
+      SMTP_PORT: "25"
+      SMTP_SENDER: "noreply@sambruk.se"
+      SMTP_USER: ${IDEAS_SMTP_USER}
+      SMTP_PASS: ${IDEAS_SMTP_PASS}
+      PUBLIC_URL: "https://app.sambruk.se/ideas"
     command: sh -c "npm install --omit=dev && node server.js"
     restart: always
     depends_on:

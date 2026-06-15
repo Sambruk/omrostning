@@ -35,6 +35,16 @@ hackaton-utmaningar. Publikt röst-UI + admingränssnitt + Express/Postgres-back
 - [x] Anti-abuse: rate-limit per IP (RATE_LIMIT_PER_MIN, default 40/min) → 429
 - [x] Anti-abuse: en röst per par per voter (par-exkludering + 409 på dubbelröst), "alla par jämförda"-läge
 
+- [x] Fler-användarplattform: magic-link-konton (passwordless), ägarskap på omröstningar
+  - users + login_tokens-tabeller, questions.owner_id (migrering i db.js, körs vid start)
+  - auth: /api/auth/request|verify|me, user-token 30d, single-use magic link 30 min
+  - /api/user/* (CRUD ägar-scopat), super-admin (/admin) kvar parallellt
+  - publika listan visar bara officiella (owner_id IS NULL); användares når via egen länk
+  - skapa.html + creator.js: Sambruk-intro (bekräfta innan konto), dashboard, delningslänk/QR
+  - nodemailer/mailer.js, SMTP+PUBLIC_URL i compose
+- [ ] **E-postleverans**: lokal postfix avvisar externa mottagare (554). Måste kopplas till
+      Postal (smtp.sambruk.se) eller annan autentiserad relä för att magic-mejl ska nå ut.
+
 ## Möjliga nästa steg (ej gjorda – be om dem vid behov)
 - [ ] Flera samtidiga frågor / kategorier under hackatonet
 - [ ] Cache-Control: no-cache på JS/CSS (slippa hård-omladdning vid uppdatering)

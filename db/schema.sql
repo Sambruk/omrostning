@@ -1,13 +1,32 @@
--- Hackaton Ideas — pairwise wiki survey schema
+-- Omröstning — pairwise wiki survey schema
+
+CREATE TABLE IF NOT EXISTS users (
+    id            SERIAL PRIMARY KEY,
+    email         TEXT NOT NULL UNIQUE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_login_at TIMESTAMPTZ
+);
+
+-- Single-use magic links for passwordless e-mail login.
+CREATE TABLE IF NOT EXISTS login_tokens (
+    token         TEXT PRIMARY KEY,
+    email         TEXT NOT NULL,
+    exp           TIMESTAMPTZ NOT NULL,
+    used          BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 CREATE TABLE IF NOT EXISTS questions (
     id            SERIAL PRIMARY KEY,
+    owner_id      INTEGER REFERENCES users(id) ON DELETE CASCADE, -- NULL = super-admin/official
     title         TEXT NOT NULL,                 -- the survey question
     description   TEXT DEFAULT '',
     status        TEXT NOT NULL DEFAULT 'active', -- draft | active | closed
     allow_suggestions BOOLEAN NOT NULL DEFAULT TRUE,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_questions_owner ON questions(owner_id);
 
 CREATE TABLE IF NOT EXISTS ideas (
     id            SERIAL PRIMARY KEY,

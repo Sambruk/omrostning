@@ -11,19 +11,18 @@
     <div class="brand"><img src="assets/sambruk-logo.png" class="logo" alt="Sambruk"> Omröstning</div>
     <nav class="topnav">
       <a href="." class="active">Rösta</a>
-      <a href="results">Resultat</a>
-      <a href="share">Dela</a>
-      <a href="admin">Admin</a>
+      <a href="results" id="navResults">Resultat</a>
+      <a href="skapa">Skapa</a>
       <button onclick="toggleTheme()" title="Byt tema">◐</button>
     </nav>
   </div>
 
   <main class="wrap">
-    <!-- Question picker (shown when several active questions) -->
-    <div id="picker" class="card hidden">
-      <h2>Välj en omröstning</h2>
-      <div class="sub">Det finns flera aktiva frågor.</div>
-      <div id="pickerList"></div>
+    <!-- Shown when no poll link (?q=) is provided. No catalog of polls. -->
+    <div id="nolink" class="card center hidden" style="max-width:480px;margin:40px auto">
+      <h2>Öppna via din länk</h2>
+      <p class="muted">Omröstningar nås bara via den länk du fått. Det finns ingen lista över omröstningar.</p>
+      <p style="margin-top:14px"><a class="btn" href="skapa">Skapa en egen omröstning →</a></p>
     </div>
 
     <!-- CAPTCHA gate, shown before voting -->
@@ -59,7 +58,7 @@
       <div class="tools">
         <button class="btn ghost" onclick="skip()">Kan inte välja ⏭</button>
         <button class="btn ghost" id="suggestBtn" onclick="openSuggest()">+ Lägg till eget förslag</button>
-        <a class="btn ghost" href="results">Se resultat →</a>
+        <a class="btn ghost" href="results" id="resultsLink">Se resultat →</a>
       </div>
 
       <!-- Suggest box -->

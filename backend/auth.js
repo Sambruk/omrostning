@@ -56,4 +56,20 @@ function checkHuman(token) {
   return !!p && p.role === 'human';
 }
 
-module.exports = { login, requireAdmin, issueHuman, checkHuman };
+// ---- User sessions (passwordless / magic-link accounts) ----
+const USER_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
+function issueUser(user) {
+  return sign({ role: 'user', uid: user.id, email: user.email, exp: Date.now() + USER_TTL_MS });
+}
+function bearer(req) {
+  const header = req.headers.authorization || '';
+  return header.startsWith('Bearer ') ? header.slice(7) : null;
+}
+// Middleware: require a valid user token, attaches req.user = { uid, email }.
+function requireUser(req, res, next) {
+  const p = verify(bearer(req));
+  if (p && p.role === 'user' && p.uid) { req.user = { uid: p.uid, email: p.email }; return next(); }
+  return res.status(401).json({ error: 'Unauthorized' });
+}
+
+module.exports = { login, requireAdmin, issueHuman, checkHuman, issueUser, requireUser };

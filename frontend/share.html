@@ -59,11 +59,6 @@
     (async () => {
       if (qid) {
         try { const q = await api('api/questions/' + qid); document.getElementById('qTitle').textContent = q.title; } catch {}
-      } else {
-        try {
-          const qs = await api('api/questions');
-          if (qs.length === 1) document.getElementById('qTitle').textContent = qs[0].title;
-        } catch {}
       }
     })();
   </script>
