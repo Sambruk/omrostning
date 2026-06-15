@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Omröstning — admin</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="assets/sambruk-logo.png" class="logo" alt="Sambruk"> Omröstning <span class="pill gray">admin</span></div>
+    <nav class="topnav">
+      <a href=".">Rösta</a>
+      <a href="results">Resultat</a>
+      <a href="admin" class="active">Admin</a>
+      <button onclick="toggleTheme()" title="Byt tema">◐</button>
+      <button id="logoutBtn" class="hidden" onclick="logout()">Logga ut</button>
+    </nav>
+  </div>
+
+  <main class="wrap wide">
+    <!-- Login -->
+    <div id="loginView" class="card hidden" style="max-width:420px;margin:40px auto">
+      <h2>Logga in</h2>
+      <div class="sub">Ange admin-lösenord.</div>
+      <input type="password" id="pw" placeholder="Lösenord" onkeydown="if(event.key==='Enter')doLogin()">
+      <div class="spacer"></div>
+      <button class="btn" onclick="doLogin()">Logga in</button>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dash" class="hidden">
+      <div class="card">
+        <h2>Ny omröstning</h2>
+        <div class="sub">Skapa en fråga och fyll på med startförslag (ett per rad).</div>
+        <label>Fråga</label>
+        <input type="text" id="newTitle" placeholder="t.ex. Vilken utmaning ska vi angripa på hackatonet?">
+        <label>Beskrivning (valfritt)</label>
+        <input type="text" id="newDesc" placeholder="Kort kontext som visas för deltagarna">
+        <label>Startförslag — separera varje förslag med en <em>tom rad</em> (ett förslag får gärna gå över flera rader)</label>
+        <textarea id="newSeeds" rows="8" placeholder="Första förslaget kan vara&#10;flera rader långt.&#10;&#10;Andra förslaget&#10;&#10;Tredje förslaget"></textarea>
+        <div class="row" style="margin-top:10px">
+          <label class="switch" style="margin:0"><input type="checkbox" id="newAllow" checked> Tillåt deltagarförslag</label>
+          <button class="btn accent" onclick="createQuestion()">Skapa omröstning</button>
+        </div>
+      </div>
+
+      <h2 style="margin:18px 4px 10px">Omröstningar</h2>
+      <div id="questions"><p class="muted">Laddar…</p></div>
+    </div>
+  </main>
+
+  <script src="js/common.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

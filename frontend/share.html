@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Omröstning — dela</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .share-card {
+      max-width: 520px; margin: 30px auto; text-align: center;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow); padding: 36px 30px;
+    }
+    .share-card img.qr { width: 320px; max-width: 80vw; height: auto; border-radius: 16px;
+      border: 1px solid var(--border); background: #fff; padding: 12px; }
+    .share-card .logo-big { height: 40px; margin-bottom: 14px; }
+    .share-url { font-weight: 700; font-size: 1.05rem; word-break: break-all; margin-top: 16px; color: var(--primary); }
+    .share-q { font-size: 1.25rem; font-weight: 800; margin: 6px 0 22px; }
+    @media print {
+      .topbar, .tools, .datechip { display: none !important; }
+      body { background: #fff; }
+      .share-card { box-shadow: none; border: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="assets/sambruk-logo.png" class="logo" alt="Sambruk"> Omröstning</div>
+    <nav class="topnav">
+      <a href=".">Rösta</a>
+      <a href="results">Resultat</a>
+      <a href="admin">Admin</a>
+      <button onclick="toggleTheme()" title="Byt tema">◐</button>
+    </nav>
+  </div>
+
+  <main class="wrap">
+    <div class="share-card">
+      <img src="assets/sambruk-logo.png" class="logo-big" alt="Sambruk">
+      <div class="share-q" id="qTitle">Skanna och rösta</div>
+      <img class="qr" id="qr" alt="QR-kod till omröstningen">
+      <div class="share-url" id="url"></div>
+      <div class="tools">
+        <button class="btn" onclick="window.print()">🖨 Skriv ut</button>
+        <button class="btn ghost" onclick="copyUrl()">Kopiera länk</button>
+        <a class="btn ghost" href=".">← Tillbaka</a>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/common.js"></script>
+  <script>
+    const qid = new URLSearchParams(location.search).get('q');
+    const base = new URL('.', location.href).href.replace(/\/$/, '');
+    const voteUrl = base + '/' + (qid ? ('?q=' + qid) : '');
+    document.getElementById('qr').src = 'api/qr.svg' + (qid ? ('?q=' + encodeURIComponent(qid)) : '');
+    document.getElementById('url').textContent = voteUrl;
+    function copyUrl() { navigator.clipboard.writeText(voteUrl).then(() => toast('Länk kopierad')); }
+    (async () => {
+      if (qid) {
+        try { const q = await api('api/questions/' + qid); document.getElementById('qTitle').textContent = q.title; } catch {}
+      } else {
+        try {
+          const qs = await api('api/questions');
+          if (qs.length === 1) document.getElementById('qTitle').textContent = qs[0].title;
+        } catch {}
+      }
+    })();
+  </script>
+</body>
+</html>

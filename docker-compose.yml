@@ -1,0 +1,34 @@
+services:
+  hackaton-ideas-postgres:
+    image: postgres:16-alpine
+    network_mode: bridge
+    ports:
+      - "172.17.0.1:14533:5432"
+    volumes:
+      - /opt/app/hackaton-ideas/db/postgres-data:/var/lib/postgresql/data
+      - /opt/app/hackaton-ideas/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    environment:
+      POSTGRES_DB: ideas
+      POSTGRES_USER: ideas
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    restart: always
+
+  hackaton-ideas-app:
+    image: node:20-alpine
+    network_mode: bridge
+    working_dir: /app
+    ports:
+      - "172.17.0.1:14100:3000"
+    volumes:
+      - /opt/app/hackaton-ideas/backend:/app
+      - /opt/app/hackaton-ideas/frontend:/app/public
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://ideas:${DB_PASSWORD}@172.17.0.1:14533/ideas
+      TOKEN_SECRET: ${TOKEN_SECRET}
+      ADMIN_PASSWORD: ${IDEAS_ADMIN_PASSWORD}
+    command: sh -c "npm install --omit=dev && node server.js"
+    restart: always
+    depends_on:
+      - hackaton-ideas-postgres

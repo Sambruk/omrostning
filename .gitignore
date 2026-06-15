@@ -1,0 +1,16 @@
+# Secrets / environment — NEVER commit (contains DB password, token secret, admin password, PAT)
+.env
+*.env
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Database data (Postgres volume)
+db/postgres-data/
+
+# Logs and OS cruft
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Omröstning — rösta</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="assets/sambruk-logo.png" class="logo" alt="Sambruk"> Omröstning</div>
+    <nav class="topnav">
+      <a href="." class="active">Rösta</a>
+      <a href="results">Resultat</a>
+      <a href="share">Dela</a>
+      <a href="admin">Admin</a>
+      <button onclick="toggleTheme()" title="Byt tema">◐</button>
+    </nav>
+  </div>
+
+  <main class="wrap">
+    <!-- Question picker (shown when several active questions) -->
+    <div id="picker" class="card hidden">
+      <h2>Välj en omröstning</h2>
+      <div class="sub">Det finns flera aktiva frågor.</div>
+      <div id="pickerList"></div>
+    </div>
+
+    <!-- CAPTCHA gate, shown before voting -->
+    <div id="captchaView" class="card hidden" style="max-width:420px;margin:40px auto;text-align:center">
+      <h2>Är du en människa?</h2>
+      <div class="sub">Skriv tecknen i bilden för att börja rösta.</div>
+      <div id="captchaImg" style="background:#fff;border-radius:12px;padding:12px;display:inline-block;min-height:64px"></div>
+      <div class="row" style="justify-content:center;margin-top:6px">
+        <button class="btn ghost sm" type="button" onclick="loadCaptcha()">↻ Ny bild</button>
+      </div>
+      <input type="text" id="captchaInput" autocomplete="off" autocapitalize="off" spellcheck="false"
+             placeholder="Skriv koden här" style="text-align:center;margin-top:12px"
+             onkeydown="if(event.key==='Enter')verifyCaptcha()">
+      <div class="spacer"></div>
+      <button class="btn" onclick="verifyCaptcha()">Fortsätt</button>
+    </div>
+
+    <div id="surveyView" class="hidden">
+      <div class="hero">
+        <h1 id="qTitle">Laddar…</h1>
+        <p id="qDesc"></p>
+        <div class="datechip" id="dateChip"></div>
+      </div>
+
+      <p class="center muted" style="margin-bottom:14px">Vilket alternativ är viktigast? Klicka för att rösta.</p>
+
+      <div class="versus" id="versus">
+        <div class="choice" id="left"  onclick="pick('left')"><span></span><span class="kbd">← vänster</span></div>
+        <div class="vs">VS</div>
+        <div class="choice" id="right" onclick="pick('right')"><span></span><span class="kbd">höger →</span></div>
+      </div>
+
+      <div class="tools">
+        <button class="btn ghost" onclick="skip()">Kan inte välja ⏭</button>
+        <button class="btn ghost" id="suggestBtn" onclick="openSuggest()">+ Lägg till eget förslag</button>
+        <a class="btn ghost" href="results">Se resultat →</a>
+      </div>
+
+      <!-- Suggest box -->
+      <div id="suggestBox" class="card hidden" style="margin-top:18px">
+        <h2>Lägg till ett förslag</h2>
+        <div class="sub">Förslaget granskas av en moderator innan det blir röstbart.</div>
+        <textarea id="suggestText" maxlength="280" placeholder="Beskriv din utmaning / idé i en mening…"></textarea>
+        <div class="row" style="margin-top:10px">
+          <button class="btn accent" onclick="submitSuggest()">Skicka in</button>
+          <button class="btn ghost" onclick="closeSuggest()">Avbryt</button>
+        </div>
+      </div>
+
+      <p class="center muted" id="voteCount" style="margin-top:22px"></p>
+    </div>
+
+    <div id="empty" class="card center hidden">
+      <h2>Inga aktiva omröstningar just nu</h2>
+      <p class="muted">Kom tillbaka snart, eller skapa en i <a href="admin">admin</a>.</p>
+    </div>
+  </main>
+
+  <script src="js/common.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
