@@ -53,6 +53,17 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// Fetch the logged-in creator's OWN polls (or null if not logged in / failed).
+async function ownPolls() {
+  const tok = localStorage.getItem('userToken');
+  if (!tok) return null;
+  try {
+    const r = await fetch('api/user/questions', { headers: { Authorization: 'Bearer ' + tok } });
+    if (!r.ok) return null;
+    return r.json();
+  } catch { return null; }
+}
+
 function todayStr() {
   return new Date().toLocaleDateString('sv-SE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 }

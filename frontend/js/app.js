@@ -8,9 +8,29 @@ document.getElementById('dateChip').textContent = todayStr();
 
 async function boot() {
   const wanted = new URLSearchParams(location.search).get('q');
-  if (!wanted) { show('nolink'); return; }   // no catalog — a link is required
+  if (!wanted) { showLanding(); return; }   // no link → landing (own polls if logged in)
   QID = Number(wanted);
   startSurvey();
+}
+
+// Landing with no ?q: a link is required — but logged-in creators see their OWN polls.
+async function showLanding() {
+  show('nolink');
+  const polls = await ownPolls();
+  if (!polls || !polls.length) return;             // not logged in / none → generic message
+  document.getElementById('noLinkMsg').classList.add('hidden');
+  document.getElementById('ownPolls').classList.remove('hidden');
+  document.getElementById('ownList').innerHTML = polls.map((q) => `
+    <div class="qlist-item">
+      <div style="flex:1">
+        <div style="font-weight:700">${esc(q.title)}</div>
+        <div class="meta">${q.approved_count} alternativ · ${q.vote_count} röster</div>
+      </div>
+      <div class="row">
+        <a class="btn sm" href="?q=${q.id}">Rösta →</a>
+        <a class="btn ghost sm" href="results?q=${q.id}">Resultat</a>
+      </div>
+    </div>`).join('');
 }
 
 function show(id) {

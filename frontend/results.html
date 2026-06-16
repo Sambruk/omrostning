@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Omröstning — resultat</title>
+  <title>Duellen — resultat</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="topbar">
-    <div class="brand"><img src="assets/sambruk-logo.png" class="logo" alt="Sambruk"> Omröstning</div>
+    <div class="brand"><img src="assets/duellen-logo.png" class="logo" alt="Sambruk Duellen"></div>
     <nav class="topnav">
       <a href="." id="navRosta">Rösta</a>
       <a href="results" class="active">Resultat</a>
@@ -24,17 +24,22 @@
       <div class="datechip" id="dateChip"></div>
     </div>
 
-    <div id="nolink" class="card center hidden" style="max-width:480px;margin:20px auto">
-      <h2>Öppna via din länk</h2>
-      <p class="muted">Resultat nås bara via länken till en specifik omröstning.</p>
+    <div id="nolink" class="hidden" style="max-width:560px;margin:20px auto">
+      <div id="ownPolls" class="card hidden">
+        <h2>Dina omröstningar</h2>
+        <div class="sub">Resultat för omröstningar du själv skapat.</div>
+        <div id="ownList"></div>
+        <p style="margin-top:14px"><a class="btn ghost sm" href="skapa">Hantera i Skapa →</a></p>
+      </div>
+      <div id="noLinkMsg" class="card center">
+        <h2>Öppna via din länk</h2>
+        <p class="muted">Resultat nås bara via länken till en specifik omröstning.</p>
+      </div>
     </div>
 
     <div id="board">
       <div class="card">
-        <div class="row" style="justify-content:space-between">
-          <div><strong id="totalVotes">0</strong> <span class="muted">röster totalt</span></div>
-          <a class="btn sm ghost" href="." id="voteMoreLink">← Rösta mer</a>
-        </div>
+        <div><strong id="totalVotes">0</strong> <span class="muted">röster totalt</span></div>
       </div>
       <div class="card" id="ranking"><p class="muted center">Laddar…</p></div>
       <p class="center muted" style="font-size:.8rem">Poäng = uppskattad chans att slå ett slumpmässigt annat alternativ. Uppdateras automatiskt.</p>

@@ -54,12 +54,9 @@ a { color: var(--primary); }
   width: 26px; height: 26px; border-radius: 8px;
   background: linear-gradient(135deg, var(--bg-grad1), var(--bg-grad2));
 }
-.brand .logo { height: 28px; width: auto; display: block; }
-[data-theme="dark"] .brand .logo,
-.share-card .logo-big { }
-@media (prefers-color-scheme: dark) { .brand .logo { filter: brightness(0) invert(1); } }
-[data-theme="dark"] .brand .logo { filter: brightness(0) invert(1); }
-[data-theme="light"] .brand .logo { filter: none; }
+.brand { gap: 14px; }
+/* Green Sambruk Duellen lockup — readable on both light and dark, no filter. */
+.brand .logo { height: 60px; width: auto; display: block; }
 .topnav { display: flex; gap: 8px; align-items: center; }
 .topnav a, .topnav button {
   font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer;

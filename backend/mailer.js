@@ -22,7 +22,7 @@ async function sendMagicLink(email, link) {
   console.log(`[magic-link] for ${email}: ${link}`);
   const html = `
     <div style="font-family:sans-serif;max-width:480px;margin:auto">
-      <h2>Logga in på Omröstning</h2>
+      <h2>Logga in på Duellen</h2>
       <p>Klicka på knappen för att logga in. Länken gäller i 30 minuter och kan bara användas en gång.</p>
       <p><a href="${link}" style="display:inline-block;background:#6366f1;color:#fff;
         text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:bold">Logga in</a></p>
@@ -30,10 +30,10 @@ async function sendMagicLink(email, link) {
       <p style="color:#888;font-size:13px">En tjänst från <a href="https://sambruk.se">Sambruk</a>.</p>
     </div>`;
   await transport.sendMail({
-    from: `"Omröstning (Sambruk)" <${SENDER}>`,
+    from: `"Duellen (Sambruk)" <${SENDER}>`,
     to: email,
-    subject: 'Din inloggningslänk till Omröstning',
-    text: `Logga in på Omröstning: ${link}\n\nLänken gäller i 30 minuter och kan bara användas en gång.`,
+    subject: 'Din inloggningslänk till Duellen',
+    text: `Logga in på Duellen: ${link}\n\nLänken gäller i 30 minuter och kan bara användas en gång.`,
     html,
   });
 }

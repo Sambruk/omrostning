@@ -3,9 +3,25 @@ document.getElementById('dateChip').textContent = todayStr();
 
 async function boot() {
   const wanted = new URLSearchParams(location.search).get('q');
-  if (!wanted) {                                   // no catalog — a link is required
+  if (!wanted) {                                   // no link → landing (own polls if logged in)
     document.getElementById('board').classList.add('hidden');
     document.getElementById('nolink').classList.remove('hidden');
+    const polls = await ownPolls();
+    if (polls && polls.length) {
+      document.getElementById('noLinkMsg').classList.add('hidden');
+      document.getElementById('ownPolls').classList.remove('hidden');
+      document.getElementById('ownList').innerHTML = polls.map((q) => `
+        <div class="qlist-item">
+          <div style="flex:1">
+            <div style="font-weight:700">${esc(q.title)}</div>
+            <div class="meta">${q.approved_count} alternativ · ${q.vote_count} röster</div>
+          </div>
+          <div class="row">
+            <a class="btn sm" href="?q=${q.id}">Resultat →</a>
+            <a class="btn ghost sm" href=".?q=${q.id}">Rösta</a>
+          </div>
+        </div>`).join('');
+    }
     return;
   }
   QID = Number(wanted);
@@ -18,8 +34,7 @@ async function boot() {
   }
   document.getElementById('qTitle').textContent = q.title;
   document.getElementById('qDesc').textContent = q.description || '';
-  // Keep "rösta"-links pointing at THIS poll (back to the vote page).
-  document.getElementById('voteMoreLink').href = '.?q=' + QID;
+  // Keep the "Rösta"-nav link pointing at THIS poll.
   document.getElementById('navRosta').href = '.?q=' + QID;
   await refresh();
   setInterval(refresh, 5000);
