@@ -163,3 +163,8 @@ hackaton-utmaningar. Publikt röst-UI + admingränssnitt + Express/Postgres-back
 - [x] Kontrollerat att lösenordet nu bara finns i `.env` och ingen annanstans på disk
 - [x] Rate limit på `/api/admin/login`: 8 försök/min/IP, nollställs vid lyckad inloggning
       (saknades helt — obegränsad gissning mot ett 9 tecken långt lösenord)
+
+## Publicerat 2026-09-02
+- [x] Committat och pushat till github.com/Sambruk/omrostning (main), commit 30a01cb
+- [x] Kontrollerat före commit: inga .env-värden, inga nycklar, ingen databasdata i indexet
+- [x] Kontrollerat efter push: `.env.example` på GitHub innehåller platshållare, ingen .env i trädet
