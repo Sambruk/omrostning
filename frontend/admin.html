@@ -4,16 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Duellen — admin</title>
+  <link rel="icon" href="assets/favicon.ico" sizes="32x32">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="topbar">
-    <div class="brand"><img src="assets/duellen-logo.png" class="logo" alt="Sambruk Duellen"> <span class="pill gray">admin</span></div>
+    <div class="brand"><a href="."><img src="assets/duellen-logo.png" class="logo" alt="Sambruk Duellen"></a> <span class="pill gray">admin</span></div>
     <nav class="topnav">
       <a href=".">Rösta</a>
       <a href="results">Resultat</a>
       <a href="admin" class="active">Admin</a>
-      <button onclick="toggleTheme()" title="Byt tema">◐</button>
+      <button class="theme-btn" onclick="toggleTheme()" title="Byt mellan ljust och mörkt läge" aria-label="Byt tema">◐</button>
       <button id="logoutBtn" class="hidden" onclick="logout()">Logga ut</button>
     </nav>
   </div>
@@ -30,15 +33,28 @@
 
     <!-- Dashboard -->
     <div id="dash" class="hidden">
+      <!-- Aggregerad användningsstatistik. Visar ENBART antal — aldrig vem som
+           skapat vad, vad omröstningarna innehåller eller andras resultat. -->
+      <div class="card" id="statsCard">
+        <h2>Statistik för Duellen</h2>
+        <div class="sub">Hur mycket tjänsten används. Innehåller bara antal — inga namn, adresser,
+          frågor eller resultat från andras omröstningar.</div>
+        <div id="statsBody"><p class="muted">Laddar…</p></div>
+      </div>
+
       <div class="card">
         <h2>Ny omröstning</h2>
-        <div class="sub">Skapa en fråga och fyll på med startförslag (ett per rad).</div>
+        <div class="sub">Formulera en fråga och lägg in de alternativ som ska ställas mot varandra.</div>
         <label>Fråga</label>
         <input type="text" id="newTitle" placeholder="t.ex. Vilken utmaning ska vi angripa på hackatonet?">
         <label>Beskrivning (valfritt)</label>
         <input type="text" id="newDesc" placeholder="Kort kontext som visas för deltagarna">
-        <label>Startförslag — separera varje förslag med en <em>tom rad</em> (ett förslag får gärna gå över flera rader)</label>
-        <textarea id="newSeeds" rows="8" placeholder="Första förslaget kan vara&#10;flera rader långt.&#10;&#10;Andra förslaget&#10;&#10;Tredje förslaget"></textarea>
+        <label for="newBy">Avsändare (valfritt) <button type="button" class="hint-btn" aria-label="Om avsändare" data-tip="Fritext som visas för deltagarna under frågan, t.ex. ditt namn, din förvaltning eller din kommun. Lämna tomt om du vill vara anonym.">?</button></label>
+        <input type="text" id="newBy" maxlength="80" placeholder="t.ex. Sambruk eller Kiruna kommun">
+        <label for="newSeeds">Alternativ <button type="button" class="hint-btn" aria-label="Så matar du in alternativ" data-tip="Skriv ett alternativ i taget och skilj dem åt med en tom rad (tryck retur två gånger). Ett alternativ får gärna gå över flera rader.">?</button></label>
+        <textarea id="newSeeds" rows="8" placeholder="Första alternativet kan vara&#10;flera rader långt.&#10;&#10;Andra alternativet&#10;&#10;Tredje alternativet"></textarea>
+        <label for="newPassword">Lösenord (valfritt) <button type="button" class="hint-btn" aria-label="Om lösenordet" data-tip="Sätt ett lösenord om omröstningen bara ska vara öppen för en viss grupp. Deltagarna måste då skriva in det för att kunna rösta och för att se resultatet.">?</button></label>
+        <input type="password" id="newPassword" autocomplete="new-password" placeholder="Lämna tomt = alla med länken kan rösta">
         <div class="row" style="margin-top:10px">
           <label class="switch" style="margin:0"><input type="checkbox" id="newAllow" checked> Tillåt deltagarförslag</label>
           <button class="btn accent" onclick="createQuestion()">Skapa omröstning</button>

@@ -1,0 +1,49 @@
+LINKEDIN — LANSERING AV DUELLEN
+Skapad 2026-08-20 · bild: två katter som duellanter
+Klistra in texten mellan strecken. Inga markdown-tecken — LinkedIn visar dem som de är.
+
+------------------------------------------------------------------------------
+
+Vilken idé ska vi satsa på? Låt dem duellera om saken.
+
+Idag släpper vi Duellen — ett kostnadsfritt omröstningsverktyg från Sambruk för att
+prioritera tillsammans.
+
+Deltagarna får två förslag i taget och väljer ett. Det är hela grejen. Av alla små val
+byggs automatiskt en rangordnad lista — och ni slipper mötet där tjugo idéer ska rankas
+på en whiteboard medan halva rummet tystnar.
+
+→ Dela med länk eller QR-kod. Ingen inloggning krävs för att rösta.
+→ Deltagarna kan lägga till egna förslag — du godkänner dem först.
+→ Resultatet uppdateras live och kan sparas som bild eller CSV.
+→ Öppen källkod, byggd inom Sambruk, fri att använda.
+
+Använd den till workshoppen, hackatonet, verksamhetsplaneringen — eller till att avgöra
+julgåvan.
+
+Testa direkt: app.sambruk.se/duellen
+
+(Katterna på bilden gör exakt det verktyget gör: två ställs mot varandra, en vinner
+ronden. Inga katter kom till skada.)
+
+#Sambruk #offentligsektor #digitalisering #medskapande #öppenkällkod
+
+------------------------------------------------------------------------------
+
+
+ALT-TEXT TILL BILDEN
+Två tecknade katter står mot varandra som duellanter, med Duellens logotyp emellan.
+(Sambruk bör föregå med gott exempel på tillgänglighet — fyll alltid i alt-texten.)
+
+
+TIPS
+· Vill du maxa räckvidden: lägg länken i första kommentaren i stället för i inlägget,
+  och byt raden i inlägget till "Länk i kommentaren".
+· Kort variant för Bluesky/Mastodon och en version riktad till kommunala
+  digitaliseringschefer kan tas fram vid behov.
+
+
+LÄNKAR
+Tjänsten:        https://app.sambruk.se/duellen/
+Så funkar det:   https://app.sambruk.se/duellen/sa-funkar-det
+Support:         hjalp@sambruksupport.se

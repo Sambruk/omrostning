@@ -16,10 +16,12 @@ const transport = nodemailer.createTransport({
   ...(SMTP_USER ? { auth: { user: SMTP_USER, pass: SMTP_PASS } } : {}),
 });
 
-// Send a magic-link sign-in e-mail. Always logs the link so sign-in still
-// works for testing even if outbound delivery is blocked/slow.
+// Send a magic-link sign-in e-mail. Loggen får INTE innehålla själva länken —
+// den är en giltig inloggning i 30 minuter — och adressen maskas, så att
+// containerloggen inte blir ett register över vilka som använder tjänsten.
+const maskEmail = (e) => String(e).replace(/^(.)[^@]*(@.*)$/, '$1***$2');
 async function sendMagicLink(email, link) {
-  console.log(`[magic-link] for ${email}: ${link}`);
+  console.log(`[magic-link] utfärdad till ${maskEmail(email)} (giltig 30 min)`);
   const html = `
     <div style="font-family:sans-serif;max-width:480px;margin:auto">
       <h2>Logga in på Duellen</h2>

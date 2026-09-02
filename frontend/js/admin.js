@@ -18,7 +18,7 @@ function gate() {
   document.getElementById('loginView').classList.toggle('hidden', authed);
   document.getElementById('dash').classList.toggle('hidden', !authed);
   document.getElementById('logoutBtn').classList.toggle('hidden', !authed);
-  if (authed) loadDash();
+  if (authed) { loadStats(); loadDash(); }
 }
 
 async function doLogin() {
@@ -48,17 +48,61 @@ async function createQuestion() {
   const body = {
     title,
     description: document.getElementById('newDesc').value.trim(),
+    creator_label: document.getElementById('newBy').value.trim(),
     allow_suggestions: document.getElementById('newAllow').checked,
     seeds: document.getElementById('newSeeds').value,
+    password: document.getElementById('newPassword').value,
   };
   try {
     await aapi('api/admin/questions', { method: 'POST', body: JSON.stringify(body) });
     document.getElementById('newTitle').value = '';
     document.getElementById('newDesc').value = '';
     document.getElementById('newSeeds').value = '';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('newBy').value = '';
     toast('Omröstning skapad');
     loadDash();
   } catch (e) { toast(e.message); }
+}
+
+// Aggregerad statistik — inga uppgifter om enskilda skapare eller omröstningar.
+async function loadStats() {
+  const el = document.getElementById('statsBody');
+  let d;
+  try { d = await aapi('api/admin/stats'); }
+  catch (e) { el.innerHTML = `<p class="muted">Kunde inte hämta statistiken: ${esc(e.message)}</p>`; return; }
+  const t = d.totals;
+  const box = (n, l, sub) =>
+    `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div>${
+      sub ? `<div class="l" style="opacity:.75">${sub}</div>` : ''}</div>`;
+  const max = Math.max(1, ...d.weekly.map((w) => Number(w.votes)));
+  el.innerHTML = `
+    <div class="stat-grid">
+      ${box(t.accounts, 'registrerade konton', `${t.accounts_30d} nya senaste 30 dgr`)}
+      ${box(t.polls, 'dueller totalt', `${t.polls_member} av medlemmar · ${t.polls_official} officiella`)}
+      ${box(t.polls_active, 'aktiva dueller', `${t.polls_closed} stängda · ${t.polls_draft} utkast`)}
+      ${box(t.polls_protected, 'lösenordsskyddade', 'av alla dueller')}
+      ${box(t.ideas, 'alternativ', `${t.ideas_from_participants} från deltagare · ${t.ideas_pending} i kö`)}
+      ${box(t.votes, 'avgivna röster', `${t.votes_30d} senaste 30 dgr`)}
+      ${box(t.voters, 'unika röstande', 'räknat per webbläsare')}
+      ${box(t.votes_skipped, '"kan inte välja"', 'överhoppade par')}
+    </div>
+    <h2 style="font-size:1rem;margin:22px 0 8px">Aktivitet per vecka</h2>
+    <table class="stats-table">
+      <thead><tr><th>Vecka</th><th>Konton</th><th>Dueller</th><th>Röster</th><th></th></tr></thead>
+      <tbody>${d.weekly.map((w) => `
+        <tr>
+          <td>${esc(w.week)}</td>
+          <td>${w.accounts}</td>
+          <td>${w.polls}</td>
+          <td>${w.votes}</td>
+          <td class="spark"><span style="width:${Number(w.votes) ? Math.max(2, Math.round((Number(w.votes) / max) * 100)) : 0}%"></span></td>
+        </tr>`).join('')}</tbody>
+    </table>
+    <p class="muted" style="font-size:.85rem;margin-top:10px">Första duellen skapades ${
+      t.first_poll_at ? esc(new Date(t.first_poll_at).toLocaleDateString('sv-SE',
+        { year: 'numeric', month: 'long', day: 'numeric' })) : '–'}.
+      Uppdaterad ${esc(new Date(d.generated_at).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' }))}.</p>`;
 }
 
 async function loadDash() {
@@ -80,7 +124,7 @@ function renderQuestion(q) {
   <div class="card" data-q="${q.id}">
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div style="flex:1;min-width:200px">
-        <div style="font-weight:800;font-size:1.05rem">${esc(q.title)} ${statusPill(q.status)}</div>
+        <div style="font-weight:800;font-size:1.05rem">${esc(q.title)} ${statusPill(q.status)} ${q.has_password ? '<span class="pill gray">🔒 lösenord</span>' : ''}</div>
         <div class="muted" style="font-size:.85rem;margin-top:3px">${esc(q.description || '')}</div>
       </div>
       ${pending ? `<span class="pill amber">${pending} väntar på granskning</span>` : ''}
@@ -97,10 +141,10 @@ function renderQuestion(q) {
       <button class="btn sm" onclick="toggle(${q.id},'ideas')">Hantera alternativ</button>
       <button class="btn ghost sm" onclick="toggle(${q.id},'settings')">Inställningar</button>
       <a class="btn ghost sm" href="api/admin/questions/${q.id}/export?format=csv" onclick="return dl(event,${q.id})">Exportera CSV</a>
-      <a class="btn ghost sm" href="results?q=${q.id}" target="_blank">Öppna resultat ↗</a>
-      <a class="btn ghost sm" href="share?q=${q.id}" target="_blank">QR / dela ↗</a>
-      <button class="btn warn sm" onclick="resetVotes(${q.id})">Nollställ röster</button>
-      <button class="btn danger sm" onclick="delQuestion(${q.id})">Radera</button>
+      <a class="btn ghost sm" href="results?q=${esc(q.slug || q.id)}" target="_blank">Öppna resultat ↗</a>
+      <a class="btn ghost sm" href="share?q=${esc(q.slug || q.id)}" target="_blank">QR / dela ↗</a>
+      <button class="btn quiet-danger sm" onclick="resetVotes(${q.id})">Nollställ röster</button>
+      <button class="btn quiet-danger sm" onclick="delQuestion(${q.id})">Radera</button>
     </div>
 
     <div id="panel-${q.id}" class="panel hidden" style="margin-top:14px"></div>
@@ -141,8 +185,8 @@ async function renderIdeas(qid, panel) {
   const approved = list.filter((i) => i.status === 'approved');
   approved.forEach((i) => { ideaTextCache[i.id] = i.text; });
   panel.innerHTML = `
-    <h2 style="font-size:1rem;margin-bottom:8px">Lägg till alternativ — separera varje med en tom rad (får gå över flera rader)</h2>
-    <textarea id="seed-${qid}" rows="6" placeholder="Ett förslag som&#10;går över flera rader&#10;&#10;Nästa förslag"></textarea>
+    <h2 style="font-size:1rem;margin-bottom:10px">Lägg till alternativ <button type="button" class="hint-btn" aria-label="Så matar du in alternativ" data-tip="Skriv ett alternativ i taget och skilj dem åt med en tom rad (tryck retur två gånger). Ett alternativ får gärna gå över flera rader.">?</button></h2>
+    <textarea id="seed-${qid}" rows="6" placeholder="Ett alternativ som&#10;går över flera rader&#10;&#10;Nästa alternativ"></textarea>
     <div class="spacer"></div>
     <button class="btn accent sm" onclick="addSeeds(${qid})">Lägg till</button>
     <h2 style="font-size:1rem;margin:16px 0 8px">Godkända alternativ (${approved.length})</h2>
@@ -151,7 +195,7 @@ async function renderIdeas(qid, panel) {
         <div style="flex:1;white-space:pre-line">${esc(i.text)} <span class="muted" style="font-size:.78rem">(poäng ${i.score}, ${i.votes} röster)</span></div>
         <div class="row">
           <button class="btn ghost sm" onclick="editIdea(${qid},${i.id})">Redigera</button>
-          <button class="btn danger sm" onclick="delIdea(${i.id},${qid})">Ta bort</button>
+          <button class="btn quiet-danger sm" onclick="delIdea(${i.id},${qid})">Ta bort</button>
         </div>
       </div>`).join('') || '<p class="muted">Inga ännu.</p>'}`;
 }
@@ -193,11 +237,13 @@ async function saveIdea(qid, id) {
 }
 
 async function renderSettings(qid, panel) {
-  const q = await api('api/questions/' + qid);
+  const q = await aapi('api/admin/questions/' + qid);
   panel.innerHTML = `
     <h2 style="font-size:1rem;margin-bottom:8px">Inställningar</h2>
     <label>Fråga</label><input type="text" id="set-title-${qid}" value="${esc(q.title)}">
     <label>Beskrivning</label><input type="text" id="set-desc-${qid}" value="${esc(q.description || '')}">
+    <label>Avsändare (visas för deltagarna) <button type="button" class="hint-btn" aria-label="Om avsändare" data-tip="Fritext som visas för deltagarna under frågan, t.ex. ditt namn, din förvaltning eller din kommun. Lämna tomt om du vill vara anonym.">?</button></label>
+    <input type="text" id="set-by-${qid}" maxlength="80" value="${esc(q.creator_label || '')}" placeholder="t.ex. Sambruk eller Kiruna kommun">
     <label>Status</label>
     <select id="set-status-${qid}">
       <option value="active" ${q.status === 'active' ? 'selected' : ''}>Aktiv (öppen för röstning)</option>
@@ -205,6 +251,14 @@ async function renderSettings(qid, panel) {
       <option value="closed" ${q.status === 'closed' ? 'selected' : ''}>Stängd (visa bara resultat)</option>
     </select>
     <label class="switch" style="margin-top:12px"><input type="checkbox" id="set-allow-${qid}" ${q.allow_suggestions ? 'checked' : ''}> Tillåt deltagarförslag</label>
+
+    <h2 style="font-size:1rem;margin:20px 0 4px">Lösenord <button type="button" class="hint-btn" aria-label="Om lösenordet" data-tip="Med lösenord måste deltagarna skriva in det för att kunna rösta och för att se resultatet. Dela lösenordet separat från länken.">?</button></h2>
+    <p class="muted" style="margin:0 0 8px;font-size:.95rem">${q.has_password
+      ? 'Omröstningen är <strong>lösenordsskyddad</strong> — både röstning och resultat kräver lösenordet.'
+      : 'Omröstningen är <strong>öppen</strong> för alla som har länken.'}</p>
+    <input type="password" id="set-pw-${qid}" autocomplete="new-password"
+           placeholder="${q.has_password ? 'Nytt lösenord (lämna tomt = behåll nuvarande)' : 'Sätt ett lösenord (lämna tomt = ingen)'}">
+    ${q.has_password ? `<label class="switch" style="margin-top:10px"><input type="checkbox" id="set-pw-clear-${qid}"> Ta bort lösenordet (öppna för alla med länken)</label>` : ''}
     <div class="spacer"></div>
     <button class="btn sm" onclick="saveSettings(${qid})">Spara</button>`;
 }
@@ -215,7 +269,13 @@ async function saveSettings(qid) {
     description: document.getElementById('set-desc-' + qid).value.trim(),
     status: document.getElementById('set-status-' + qid).value,
     allow_suggestions: document.getElementById('set-allow-' + qid).checked,
+    creator_label: document.getElementById('set-by-' + qid).value.trim(),
   };
+  // Lösenordet ändras bara när något faktiskt fyllts i (eller "ta bort" kryssats).
+  const pw = document.getElementById('set-pw-' + qid);
+  const clear = document.getElementById('set-pw-clear-' + qid);
+  if (clear && clear.checked) body.password = '';
+  else if (pw && pw.value) body.password = pw.value;
   try { await aapi('api/admin/questions/' + qid, { method: 'PATCH', body: JSON.stringify(body) }); toast('Sparat'); loadDash(); }
   catch (e) { toast(e.message); }
 }

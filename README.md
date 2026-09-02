@@ -22,6 +22,10 @@ prioritera t.ex. hackaton-utmaningar, men fungerar för vilken prioriteringsfrå
 - ⚙️ Admingränssnitt: skapa/redigera frågor, modereringskö, redigera alternativ (flerradigt),
   dashboard, **nollställ röster** (för testkörning), CSV/JSON-export.
 - 📷 QR-kod och utskrivbar dela-sida som pekar på omröstningen.
+- 🔗 **Svårgissade delningslänkar**: varje omröstning har en slumpad slug (10 tecken) i länken —
+  `?q=k7p2m9x4qd`. Gamla numeriska länkar fungerar fortfarande.
+- 🔒 **Lösenord per omröstning** (valfritt): skaparen kan kräva ett lösenord för att både rösta
+  och se resultatet. Inget innehåll — inte ens frågans titel — visas innan lösenordet är rätt.
 - 🛡️ Anti-abuse: självhostad **SVG-CAPTCHA** före röstning, **rate-limit per IP**, och
   **en röst per par och deltagare**.
 
@@ -46,8 +50,9 @@ reverse proxy framför vid behov. Publika sidor: `/` (rösta), `/results`, `/sha
 | Variabel | Beskrivning |
 | --- | --- |
 | `DB_PASSWORD` | Postgres-lösenord |
-| `TOKEN_SECRET` | HMAC-nyckel för admin- och human-tokens |
-| `IDEAS_ADMIN_PASSWORD` | Lösenord till `/admin` |
+| `TOKEN_SECRET` | HMAC-nyckel för admin-, human- och omröstningstokens |
+| `ADMIN` | Lösenord till `/admin` (statistik + officiella omröstningar) |
+| `IDEAS_ADMIN_PASSWORD` | Fallback för `ADMIN` |
 | `RATE_LIMIT_PER_MIN` | Max röster per IP och minut (default 40) |
 
 ## API (urval)
@@ -55,6 +60,7 @@ reverse proxy framför vid behov. Publika sidor: `/` (rösta), `/results`, `/sha
 | Metod & rutt | Beskrivning |
 | --- | --- |
 | `GET /api/questions` | Aktiva frågor |
+| `POST /api/questions/:id/access` | Lås upp lösenordsskyddad omröstning → 12h-token (`X-Poll-Token`) |
 | `GET /api/questions/:id/pair?voter=…` | Nästa par att rösta på (exkluderar redan sedda) |
 | `POST /api/questions/:id/vote` | Rösta (kräver CAPTCHA-token, rate-limitad) |
 | `POST /api/questions/:id/ideas` | Skicka in förslag (→ moderering) |
@@ -62,6 +68,9 @@ reverse proxy framför vid behov. Publika sidor: `/` (rösta), `/results`, `/sha
 | `GET /api/captcha` · `POST /api/captcha/verify` | CAPTCHA |
 | `POST /api/admin/login` | Admin-inloggning |
 | `POST /api/admin/questions/:id/reset` | Nollställ röster |
+| `GET /api/admin/stats` | Aggregerad användningsstatistik (endast antal) |
+
+Publika rutter tar `:id` som antingen omröstningens slug eller dess numeriska id.
 
 ## Licens
 

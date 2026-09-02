@@ -1,7 +1,9 @@
 const crypto = require('node:crypto');
 
 const SECRET = process.env.TOKEN_SECRET || 'dev-secret-change-me';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+// Lösenordet till /admin. `ADMIN` sätts i projektets .env; ADMIN_PASSWORD finns
+// kvar som fallback så en tom ADMIN inte låser ute super-admin.
+const ADMIN_PASSWORD = process.env.ADMIN || process.env.ADMIN_PASSWORD || '';
 const TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
 
 function sign(payload) {
@@ -72,4 +74,32 @@ function requireUser(req, res, next) {
   return res.status(401).json({ error: 'Unauthorized' });
 }
 
-module.exports = { login, requireAdmin, issueHuman, checkHuman, issueUser, requireUser };
+// ---- Per-poll access password ----
+// Hashed with scrypt (salt per poll). Format: scrypt$<salt>$<hash>.
+function hashSecret(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  return `scrypt$${salt}$${crypto.scryptSync(String(password), salt, 32).toString('hex')}`;
+}
+function verifySecret(password, stored) {
+  if (!stored || typeof password !== 'string' || !password) return false;
+  const [alg, salt, hash] = String(stored).split('$');
+  if (alg !== 'scrypt' || !salt || !hash) return false;
+  const got = crypto.scryptSync(password, salt, 32);
+  const want = Buffer.from(hash, 'hex');
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
+}
+
+// Pass issued after a correct poll password. Bound to one poll.
+const POLL_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
+function issuePoll(qid) {
+  return sign({ role: 'poll', qid: Number(qid), exp: Date.now() + POLL_TTL_MS });
+}
+function checkPoll(token, qid) {
+  const p = verify(token);
+  return !!p && p.role === 'poll' && Number(p.qid) === Number(qid);
+}
+
+module.exports = {
+  login, requireAdmin, issueHuman, checkHuman, issueUser, requireUser,
+  verify, bearer, hashSecret, verifySecret, issuePoll, checkPoll,
+};

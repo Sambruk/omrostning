@@ -39,7 +39,7 @@ document.getElementById('introAck').addEventListener('change', (e) => {
 });
 
 async function requestLink() {
-  if (!document.getElementById('introAck').checked) return toast('Bekräfta att du läst om Sambruk');
+  if (!document.getElementById('introAck').checked) return toast('Bekräfta att du läst informationen ovan');
   const email = document.getElementById('email').value.trim();
   if (!email) return toast('Ange din e-postadress');
   try {
@@ -69,12 +69,16 @@ async function createQuestion() {
   const body = {
     title,
     description: document.getElementById('newDesc').value.trim(),
+    creator_label: document.getElementById('newBy').value.trim(),
     allow_suggestions: document.getElementById('newAllow').checked,
     seeds: document.getElementById('newSeeds').value,
+    password: document.getElementById('newPassword').value,
   };
   try {
     await uapi('api/user/questions', { method: 'POST', body: JSON.stringify(body) });
     titleEl.value = ''; document.getElementById('newDesc').value = ''; document.getElementById('newSeeds').value = '';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('newBy').value = '';
     toast('Omröstning skapad'); loadDash();
   } catch (e) { toast(e.message); }
 }
@@ -92,9 +96,12 @@ function statusPill(s) {
   return `<span class="pill ${c}">${t}</span>`;
 }
 
-function publicLink(qid) {
+// Delningslänken använder omröstningens slug — en svårgissad nyckel, så att
+// ingen kan bläddra sig fram till andras omröstningar genom att räkna upp id:n.
+function shareKey(q) { return q.slug || q.id; }
+function publicLink(key) {
   const base = new URL('.', location.href).href.replace(/\/$/, '');
-  return `${base}/?q=${qid}`;
+  return `${base}/?q=${key}`;
 }
 
 function renderQuestion(q) {
@@ -103,7 +110,7 @@ function renderQuestion(q) {
   <div class="card" data-q="${q.id}">
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div style="flex:1;min-width:200px">
-        <div style="font-weight:800;font-size:1.05rem">${esc(q.title)} ${statusPill(q.status)}</div>
+        <div style="font-weight:800;font-size:1.05rem">${esc(q.title)} ${statusPill(q.status)} ${q.has_password ? '<span class="pill gray">🔒 lösenord</span>' : ''}</div>
         <div class="muted" style="font-size:.85rem;margin-top:3px">${esc(q.description || '')}</div>
       </div>
       ${pending ? `<span class="pill amber">${pending} väntar på granskning</span>` : ''}
@@ -116,25 +123,25 @@ function renderQuestion(q) {
     <div class="card" style="background:var(--card-2);margin-bottom:12px">
       <div class="sub" style="margin:0 0 6px">Dela denna länk för att samla röster:</div>
       <div class="row" style="align-items:center">
-        <input type="text" readonly value="${publicLink(q.id)}" onclick="this.select()" style="flex:1;min-width:200px">
-        <button class="btn sm" onclick="copyLink(${q.id})">Kopiera</button>
-        <a class="btn ghost sm" href="share?q=${q.id}" target="_blank">QR ↗</a>
+        <input type="text" readonly value="${publicLink(shareKey(q))}" onclick="this.select()" style="flex:1;min-width:200px">
+        <button class="btn sm" onclick="copyLink('${esc(shareKey(q))}')">Kopiera</button>
+        <a class="btn ghost sm" href="share?q=${esc(shareKey(q))}" target="_blank">QR ↗</a>
       </div>
     </div>
     <div class="row">
       ${pending ? `<button class="btn warn sm" onclick="toggle(${q.id},'mod')">Granska kö (${pending})</button>` : ''}
       <button class="btn sm" onclick="toggle(${q.id},'ideas')">Hantera alternativ</button>
       <button class="btn ghost sm" onclick="toggle(${q.id},'settings')">Inställningar</button>
-      <a class="btn ghost sm" href="results?q=${q.id}" target="_blank">Resultat ↗</a>
+      <a class="btn ghost sm" href="results?q=${esc(shareKey(q))}" target="_blank">Resultat ↗</a>
       <a class="btn ghost sm" href="api/user/questions/${q.id}/export?format=csv" onclick="return dl(event,${q.id})">CSV</a>
-      <button class="btn warn sm" onclick="resetVotes(${q.id})">Nollställ röster</button>
-      <button class="btn danger sm" onclick="delQuestion(${q.id})">Radera</button>
+      <button class="btn quiet-danger sm" onclick="resetVotes(${q.id})">Nollställ röster</button>
+      <button class="btn quiet-danger sm" onclick="delQuestion(${q.id})">Radera</button>
     </div>
     <div id="panel-${q.id}" class="hidden" style="margin-top:14px"></div>
   </div>`;
 }
 
-function copyLink(qid) { navigator.clipboard.writeText(publicLink(qid)).then(() => toast('Länk kopierad')); }
+function copyLink(key) { navigator.clipboard.writeText(publicLink(key)).then(() => toast('Länk kopierad')); }
 
 async function toggle(qid, kind) {
   const panel = document.getElementById('panel-' + qid);
@@ -173,8 +180,8 @@ async function renderIdeas(qid, panel) {
   const approved = list.filter((i) => i.status === 'approved');
   approved.forEach((i) => { ideaTextCache[i.id] = i.text; });
   panel.innerHTML = `
-    <h2 style="font-size:1rem;margin-bottom:8px">Lägg till alternativ — separera med tom rad (får gå över flera rader)</h2>
-    <textarea id="seed-${qid}" rows="5" placeholder="Ett förslag&#10;&#10;Nästa förslag"></textarea>
+    <h2 style="font-size:1rem;margin-bottom:10px">Lägg till alternativ <button type="button" class="hint-btn" aria-label="Så matar du in alternativ" data-tip="Skriv ett alternativ i taget och skilj dem åt med en tom rad (tryck retur två gånger). Ett alternativ får gärna gå över flera rader.">?</button></h2>
+    <textarea id="seed-${qid}" rows="5" placeholder="Ett alternativ&#10;&#10;Nästa alternativ"></textarea>
     <div class="spacer"></div>
     <button class="btn accent sm" onclick="addSeeds(${qid})">Lägg till</button>
     <h2 style="font-size:1rem;margin:16px 0 8px">Alternativ (${approved.length})</h2>
@@ -183,17 +190,19 @@ async function renderIdeas(qid, panel) {
         <div style="flex:1;white-space:pre-line">${esc(i.text)} <span class="muted" style="font-size:.78rem">(poäng ${i.score}, ${i.votes} röster)</span></div>
         <div class="row">
           <button class="btn ghost sm" onclick="editIdea(${qid},${i.id})">Redigera</button>
-          <button class="btn danger sm" onclick="delIdea(${i.id},${qid})">Ta bort</button>
+          <button class="btn quiet-danger sm" onclick="delIdea(${i.id},${qid})">Ta bort</button>
         </div>
       </div>`).join('') || '<p class="muted">Inga ännu.</p>'}`;
 }
 
 async function renderSettings(qid, panel) {
-  const q = await api('api/questions/' + qid);
+  const q = await uapi('api/user/questions/' + qid);
   panel.innerHTML = `
     <h2 style="font-size:1rem;margin-bottom:8px">Inställningar</h2>
     <label>Fråga</label><input type="text" id="set-title-${qid}" value="${esc(q.title)}">
     <label>Beskrivning</label><input type="text" id="set-desc-${qid}" value="${esc(q.description || '')}">
+    <label>Avsändare (visas för deltagarna) <button type="button" class="hint-btn" aria-label="Om avsändare" data-tip="Fritext som visas för deltagarna under frågan, t.ex. ditt namn, din förvaltning eller din kommun. Lämna tomt om du vill vara anonym.">?</button></label>
+    <input type="text" id="set-by-${qid}" maxlength="80" value="${esc(q.creator_label || '')}" placeholder="t.ex. Sambruk eller Kiruna kommun">
     <label>Status</label>
     <select id="set-status-${qid}">
       <option value="active" ${q.status === 'active' ? 'selected' : ''}>Aktiv (öppen för röstning)</option>
@@ -201,6 +210,14 @@ async function renderSettings(qid, panel) {
       <option value="closed" ${q.status === 'closed' ? 'selected' : ''}>Stängd (visa bara resultat)</option>
     </select>
     <label class="switch" style="margin-top:12px"><input type="checkbox" id="set-allow-${qid}" ${q.allow_suggestions ? 'checked' : ''}> Tillåt deltagarförslag</label>
+
+    <h2 style="font-size:1rem;margin:20px 0 4px">Lösenord <button type="button" class="hint-btn" aria-label="Om lösenordet" data-tip="Med lösenord måste deltagarna skriva in det för att kunna rösta och för att se resultatet. Dela lösenordet separat från länken. Du själv kommer in utan att skriva det, så länge du är inloggad.">?</button></h2>
+    <p class="muted" style="margin:0 0 8px;font-size:.95rem">${q.has_password
+      ? 'Omröstningen är <strong>lösenordsskyddad</strong> — både röstning och resultat kräver lösenordet.'
+      : 'Omröstningen är <strong>öppen</strong> för alla som har länken.'}</p>
+    <input type="password" id="set-pw-${qid}" autocomplete="new-password"
+           placeholder="${q.has_password ? 'Nytt lösenord (lämna tomt = behåll nuvarande)' : 'Sätt ett lösenord (lämna tomt = ingen)'}">
+    ${q.has_password ? `<label class="switch" style="margin-top:10px"><input type="checkbox" id="set-pw-clear-${qid}"> Ta bort lösenordet (öppna för alla med länken)</label>` : ''}
     <div class="spacer"></div>
     <button class="btn sm" onclick="saveSettings(${qid})">Spara</button>`;
 }
@@ -211,7 +228,13 @@ async function saveSettings(qid) {
     description: document.getElementById('set-desc-' + qid).value.trim(),
     status: document.getElementById('set-status-' + qid).value,
     allow_suggestions: document.getElementById('set-allow-' + qid).checked,
+    creator_label: document.getElementById('set-by-' + qid).value.trim(),
   };
+  // Lösenordet ändras bara när något faktiskt fyllts i (eller "ta bort" kryssats).
+  const pw = document.getElementById('set-pw-' + qid);
+  const clear = document.getElementById('set-pw-clear-' + qid);
+  if (clear && clear.checked) body.password = '';
+  else if (pw && pw.value) body.password = pw.value;
   try { await uapi('api/user/questions/' + qid, { method: 'PATCH', body: JSON.stringify(body) }); toast('Sparat'); loadDash(); }
   catch (e) { toast(e.message); }
 }

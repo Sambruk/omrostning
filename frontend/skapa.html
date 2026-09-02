@@ -4,81 +4,125 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Duellen — skapa</title>
+  <link rel="icon" href="assets/favicon.ico" sizes="32x32">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="topbar">
-    <div class="brand"><img src="assets/duellen-logo.png" class="logo" alt="Sambruk Duellen"></div>
+    <div class="brand"><a href="."><img src="assets/duellen-logo.png" class="logo" alt="Sambruk Duellen"></a></div>
     <nav class="topnav">
       <a href=".">Rösta</a>
-      <a href="skapa" class="active">Skapa</a>
-      <button onclick="toggleTheme()" title="Byt tema">◐</button>
+      <a href="results">Resultat</a>
+      <a href="sa-funkar-det">Så funkar det</a>
+      <a href="skapa" class="active">Skapa/Ändra</a>
+      <button class="theme-btn" onclick="toggleTheme()" title="Byt mellan ljust och mörkt läge" aria-label="Byt tema">◐</button>
       <button id="logoutBtn" class="hidden" onclick="logoutUser()">Logga ut</button>
     </nav>
   </div>
 
   <main class="wrap wide">
-    <!-- Verifying magic link -->
-    <div id="verifyView" class="card center hidden" style="max-width:420px;margin:40px auto">
-      <h2>Loggar in…</h2><p class="muted">Verifierar din länk.</p>
+    <!-- Verifierar magisk länk -->
+    <div id="verifyView" class="card center hidden" style="max-width:520px;margin:40px auto">
+      <h2>Loggar in…</h2><p class="muted lead">Verifierar din länk.</p>
     </div>
 
-    <!-- Sambruk intro + signup/login -->
+    <!-- Inloggningssidan är också Sambruks skyltfönster: informationen om
+         Sambruk ligger överst, därefter vad verktyget är, och sist inloggningen. -->
     <div id="introView" class="hidden">
-      <div class="card" style="max-width:640px;margin:24px auto">
-        <h2>Om Sambruk</h2>
-        <p>Den här tjänsten drivs av <strong>Sambruk</strong> — en medlemsorganisation där svenska
-        offentliga organisationer samverkar för att utveckla digitala tjänster och dela lösningar med varandra.
-        Genom att gå samman kan offentliga organisationer spara resurser, undvika att uppfinna hjulet flera gånger
-        och bygga bättre välfärd med hjälp av digitalisering.</p>
-        <p>Omröstningsverktyget låter dig snabbt prioritera idéer, förslag eller utmaningar
-        tillsammans med andra — varje deltagare jämför två alternativ i taget och resultatet
-        rankas automatiskt.</p>
-        <p>Läs mer om oss på <a href="https://sambruk.se" target="_blank" rel="noopener">sambruk.se</a>.</p>
+      <div class="wrap narrow" style="padding:0">
 
-        <hr style="border:none;border-top:1px solid var(--border);margin:18px 0">
+        <div class="hero" style="margin-bottom:22px">
+          <h1>Skapa en egen omröstning</h1>
+          <p>Ett kostnadsfritt verktyg från Sambruk. Logga in med din e-postadress — inget lösenord behövs.</p>
+          <p style="margin-top:14px"><a href="#logga-in">Hoppa direkt till inloggningen ↓</a></p>
+        </div>
 
-        <h2>Skapa konto / logga in</h2>
-        <div class="sub">Vi använder inloggning via e-post — ingen lösenord behövs. Du får en länk skickad till din inkorg.</div>
-        <label class="switch" style="margin:10px 0">
-          <input type="checkbox" id="introAck"> Jag har läst om Sambruk ovan
-        </label>
-        <label>E-postadress</label>
-        <input type="email" id="email" placeholder="namn@kommun.se" autocomplete="email"
-               onkeydown="if(event.key==='Enter')requestLink()">
-        <div class="spacer"></div>
-        <button class="btn" id="sendLinkBtn" onclick="requestLink()" disabled>Skicka inloggningslänk</button>
-        <p id="introMsg" class="muted" style="margin-top:12px"></p>
+        <!-- 1. Avsändaren -->
+        <div class="card about">
+          <span class="eyebrow">Om avsändaren</span>
+          <h2>Sambruk — offentlig sektor som utvecklar tillsammans</h2>
+          <p><strong>Sambruk</strong> är en medlemsorganisation där svenska offentliga organisationer samverkar för
+             att utveckla digitala tjänster och dela lösningar med varandra. Genom att gå samman kan offentliga
+             organisationer spara resurser, undvika att uppfinna hjulet flera gånger och bygga bättre välfärd
+             med hjälp av digitalisering.</p>
+          <p>Duellen är ett av resultaten: byggd inom Sambruk, med öppen källkod, och fri att använda för
+             medlemmar och andra. Sambruk står för drift och support — din e-postadress används enbart för
+             att logga in i tjänsten.</p>
+          <p style="margin-top:18px">
+            <a class="btn" href="https://sambruk.se" target="_blank" rel="noopener">Läs mer om Sambruk →</a>
+          </p>
+        </div>
+
+        <!-- 2. Verktyget -->
+        <div class="card about-org">
+          <span class="eyebrow gray">Om tjänsten</span>
+          <h2>Vad är Duellen?</h2>
+          <p>Duellen är ett omröstningsverktyg för att prioritera idéer, förslag eller utmaningar tillsammans.
+             Deltagarna jämför två alternativ i taget — ett enkelt val som tar några sekunder — och av alla
+             jämförelser byggs automatiskt en rangordnad lista.</p>
+          <p>Du skapar en fråga, fyller på med alternativ och delar en länk eller QR-kod. Resultatet uppdateras
+             löpande medan folk röstar, och kan exporteras som bild eller CSV.</p>
+          <p style="margin-top:16px">
+            <a class="btn ghost" href="sa-funkar-det">Så fungerar Duellen — steg för steg →</a>
+          </p>
+        </div>
+
+        <!-- 3. Inloggningen -->
+        <div class="card" id="logga-in">
+          <h2>Logga in eller skapa konto</h2>
+          <div class="sub">Vi skickar en inloggningslänk till din inkorg. Länken gäller i 30 minuter och du använder samma adress varje gång.</div>
+          <label for="email">E-postadress</label>
+          <input type="email" id="email" placeholder="namn@kommun.se" autocomplete="email"
+                 onkeydown="if(event.key==='Enter')requestLink()">
+          <label class="switch" style="margin:20px 0 0">
+            <input type="checkbox" id="introAck">
+            <span>Jag har läst informationen ovan om Sambruk och Duellen</span>
+          </label>
+          <div class="spacer"></div>
+          <button class="btn big" id="sendLinkBtn" onclick="requestLink()" disabled>Skicka inloggningslänk</button>
+          <p id="introMsg" class="muted" style="margin-top:14px"></p>
+          <p class="muted" style="margin-top:14px;font-size:.95rem">
+            Du behöver bara logga in för att <em>skapa</em> en omröstning. Att rösta kräver ingen inloggning.
+          </p>
+        </div>
+
       </div>
     </div>
 
-    <!-- "Check your mail" confirmation -->
-    <div id="sentView" class="card center hidden" style="max-width:460px;margin:40px auto">
+    <!-- "Kolla din mejl" -->
+    <div id="sentView" class="card center hidden" style="max-width:560px;margin:40px auto">
       <h2>Kolla din mejl 📨</h2>
-      <p>Vi har skickat en inloggningslänk till <strong id="sentEmail"></strong>.
-      Länken gäller i 30 minuter. Öppna den i samma webbläsare.</p>
-      <button class="btn ghost sm" onclick="showIntro()">← Tillbaka</button>
+      <p class="lead">Vi har skickat en inloggningslänk till <strong id="sentEmail"></strong>.</p>
+      <p class="muted">Länken gäller i 30 minuter. Öppna den i samma webbläsare.</p>
+      <div class="spacer"></div>
+      <button class="btn ghost" onclick="showIntro()">← Tillbaka</button>
     </div>
 
-    <!-- Creator dashboard -->
+    <!-- Skaparens vy -->
     <div id="dash" class="hidden">
-      <p class="muted" style="margin:8px 4px">Inloggad som <strong id="meEmail"></strong></p>
+      <p class="muted" style="margin:10px 4px 18px">Inloggad som <strong id="meEmail"></strong></p>
       <div class="card">
         <h2>Ny omröstning</h2>
-        <div class="sub">Skapa en fråga och fyll på med startförslag. Separera varje förslag med en <em>tom rad</em> (ett förslag får gå över flera rader).</div>
-        <label>Fråga</label>
+        <div class="sub">Formulera en fråga och lägg in de alternativ som ska ställas mot varandra. Du kan fylla på med fler alternativ när som helst.</div>
+        <label for="newTitle">Fråga</label>
         <input type="text" id="newTitle" placeholder="t.ex. Vilken idé ska vi satsa på?">
-        <label>Beskrivning (valfritt)</label>
+        <label for="newDesc">Beskrivning (valfritt)</label>
         <input type="text" id="newDesc" placeholder="Kort kontext som visas för deltagarna">
-        <label>Startförslag</label>
-        <textarea id="newSeeds" rows="7" placeholder="Första förslaget&#10;&#10;Andra förslaget&#10;&#10;Tredje förslaget"></textarea>
-        <div class="row" style="margin-top:10px">
-          <label class="switch" style="margin:0"><input type="checkbox" id="newAllow" checked> Tillåt deltagarförslag</label>
+        <label for="newBy">Avsändare (valfritt) <button type="button" class="hint-btn" aria-label="Om avsändare" data-tip="Fritext som visas för deltagarna under frågan, t.ex. ditt namn, din förvaltning eller din kommun. Lämna tomt om du vill vara anonym.">?</button></label>
+        <input type="text" id="newBy" maxlength="80" placeholder="t.ex. Sambruk eller Kiruna kommun">
+        <label for="newSeeds">Alternativ <button type="button" class="hint-btn" aria-label="Så matar du in alternativ" data-tip="Skriv ett alternativ i taget och skilj dem åt med en tom rad (tryck retur två gånger). Ett alternativ får gärna gå över flera rader.">?</button></label>
+        <textarea id="newSeeds" rows="7" placeholder="Första alternativet&#10;&#10;Andra alternativet&#10;&#10;Tredje alternativet"></textarea>
+        <label for="newPassword">Lösenord (valfritt) <button type="button" class="hint-btn" aria-label="Om lösenordet" data-tip="Sätt ett lösenord om omröstningen bara ska vara öppen för en viss grupp. Deltagarna måste då skriva in det för att kunna rösta och för att se resultatet. Dela lösenordet separat från länken — du kommer själv in utan att skriva det så länge du är inloggad.">?</button></label>
+        <input type="password" id="newPassword" autocomplete="new-password" placeholder="Lämna tomt = alla med länken kan rösta">
+        <div class="row" style="margin-top:16px">
+          <label class="switch" style="margin:0"><input type="checkbox" id="newAllow" checked> <span>Tillåt deltagarförslag</span></label>
           <button class="btn accent" onclick="createQuestion()">Skapa omröstning</button>
         </div>
       </div>
 
-      <h2 style="margin:18px 4px 10px">Mina omröstningar</h2>
+      <h2 style="margin:26px 4px 14px">Mina omröstningar</h2>
       <div id="questions"><p class="muted">Laddar…</p></div>
     </div>
   </main>

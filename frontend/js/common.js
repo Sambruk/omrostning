@@ -23,6 +23,29 @@ function voterId() {
   return v;
 }
 
+// ---- password pass for a protected poll ----
+// One pass per poll, kept per browser. Sent as X-Poll-Token on that poll's calls.
+function pollToken(qid) { return localStorage.getItem('pollToken:' + qid) || ''; }
+function setPollToken(qid, t) { localStorage.setItem('pollToken:' + qid, t); }
+function clearPollToken(qid) { localStorage.removeItem('pollToken:' + qid); }
+function pollHeaders(qid) {
+  const t = pollToken(qid);
+  return t ? { 'X-Poll-Token': t } : {};
+}
+
+// Unlock a poll: with a typed password, or — for the creator/admin — with the
+// login token they already have (no password needed to open their own poll).
+async function unlockPoll(qid, password) {
+  const headers = {};
+  const mine = localStorage.getItem('userToken') || localStorage.getItem('adminToken');
+  if (!password && mine) headers.Authorization = 'Bearer ' + mine;
+  const d = await api(`api/questions/${qid}/access`, {
+    method: 'POST', headers, body: JSON.stringify({ password: password || '' }),
+  });
+  setPollToken(qid, d.token);
+  return d;
+}
+
 // ---- fetch helpers ----
 async function api(path, opts = {}) {
   const { headers, ...rest } = opts;
@@ -67,3 +90,25 @@ async function ownPolls() {
 function todayStr() {
   return new Date().toLocaleDateString('sv-SE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 }
+
+// Inject a shared footer on every page (info about Sambruk + links).
+(function addFooter() {
+  const f = document.createElement('footer');
+  f.className = 'site-footer';
+  f.innerHTML = `
+    <div class="foot-inner">
+      <p><strong>Duellen</strong> är ett omröstningsverktyg där deltagarna jämför två förslag i taget.
+      Tjänsten drivs av <strong>Sambruk</strong> — en medlemsorganisation där svenska offentliga
+      organisationer samverkar för att utveckla digitala tjänster och dela lösningar med varandra.</p>
+      <p class="foot-links">
+        <a href="sa-funkar-det">Så fungerar Duellen</a>
+        <span class="sep" aria-hidden="true">·</span>
+        <a href="https://sambruk.se" target="_blank" rel="noopener">sambruk.se</a>
+        <span class="sep" aria-hidden="true">·</span>
+        <a href="https://github.com/Sambruk/omrostning" target="_blank" rel="noopener">Öppen källkod på GitHub</a>
+      </p>
+      <p class="foot-support">Hittat ett fel eller behöver du hjälp? Mejla
+        <a href="mailto:hjalp@sambruksupport.se?subject=Duellen">hjalp@sambruksupport.se</a></p>
+    </div>`;
+  document.body.appendChild(f);
+})();

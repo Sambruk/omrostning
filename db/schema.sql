@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS questions (
     description   TEXT DEFAULT '',
     status        TEXT NOT NULL DEFAULT 'active', -- draft | active | closed
     allow_suggestions BOOLEAN NOT NULL DEFAULT TRUE,
+    access_password TEXT,                          -- NULL = öppen; annars scrypt-hash
+    creator_label TEXT DEFAULT '',                 -- valfri avsändare: namn eller organisation
+    slug          TEXT UNIQUE,                     -- svårgissad nyckel i delningslänken
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

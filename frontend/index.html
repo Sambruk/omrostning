@@ -4,66 +4,88 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Duellen — rösta</title>
+  <link rel="icon" href="assets/favicon.ico" sizes="32x32">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="topbar">
-    <div class="brand"><img src="assets/duellen-logo.png" class="logo" alt="Sambruk Duellen"></div>
+    <div class="brand"><a href="."><img src="assets/duellen-logo.png" class="logo" alt="Sambruk Duellen"></a></div>
     <nav class="topnav">
       <a href="." class="active">Rösta</a>
       <a href="results" id="navResults">Resultat</a>
-      <a href="skapa">Skapa</a>
-      <button onclick="toggleTheme()" title="Byt tema">◐</button>
+      <a href="sa-funkar-det">Så funkar det</a>
+      <a href="skapa">Skapa/Ändra</a>
+      <button class="theme-btn" onclick="toggleTheme()" title="Byt mellan ljust och mörkt läge" aria-label="Byt tema">◐</button>
     </nav>
   </div>
 
   <main class="wrap">
-    <!-- Shown when no poll link (?q=) is provided. No catalog of OTHERS' polls. -->
-    <div id="nolink" class="hidden" style="max-width:560px;margin:40px auto">
-      <!-- Logged-in creator: their own polls -->
+    <!-- Visas när ingen omröstningslänk (?q=) finns. Ingen katalog över andras omröstningar. -->
+    <div id="nolink" class="hidden" style="max-width:640px;margin:30px auto">
+      <!-- Inloggad skapare: egna omröstningar -->
       <div id="ownPolls" class="card hidden">
         <h2>Dina omröstningar</h2>
         <div class="sub">Omröstningar du själv skapat. Rösta eller se resultat.</div>
         <div id="ownList"></div>
-        <p style="margin-top:14px"><a class="btn ghost sm" href="skapa">Hantera i Skapa →</a></p>
+        <p style="margin-top:18px"><a class="btn ghost" href="skapa">Hantera i Skapa/Ändra →</a></p>
       </div>
-      <!-- Everyone else -->
+      <!-- Alla andra -->
       <div id="noLinkMsg" class="card center">
         <h2>Öppna via din länk</h2>
-        <p class="muted">Omröstningar nås bara via den länk du fått. Det finns ingen lista över andras omröstningar.</p>
-        <p style="margin-top:14px"><a class="btn" href="skapa">Logga in / skapa en egen →</a></p>
+        <p class="muted lead">En omröstning nås bara via länken eller QR-koden du fått. Det finns ingen lista över andras omröstningar.</p>
+        <p style="margin-top:22px"><a class="btn big" href="skapa">Logga in eller skapa en egen →</a></p>
+        <p style="margin-top:16px"><a href="sa-funkar-det">Så fungerar Duellen →</a></p>
       </div>
     </div>
 
-    <!-- CAPTCHA gate, shown before voting -->
-    <div id="captchaView" class="card hidden" style="max-width:420px;margin:40px auto;text-align:center">
+    <!-- Lösenordsgrind: omröstningen är skyddad av den som skapat den -->
+    <div id="lockView" class="card hidden" style="max-width:520px;margin:30px auto;text-align:center">
+      <h2>🔒 Lösenordsskyddad omröstning</h2>
+      <div class="sub">Den som skapat omröstningen har satt ett lösenord. Skriv in det för att rösta och se resultatet.</div>
+      <input type="password" id="lockInput" aria-label="Lösenord till omröstningen" autocomplete="current-password"
+             placeholder="Lösenord" style="text-align:center;margin-top:10px"
+             onkeydown="if(event.key==='Enter')submitPassword()">
+      <p id="lockMsg" class="muted" style="margin:12px 0 0;min-height:1.2em"></p>
+      <div class="spacer"></div>
+      <button class="btn big" id="lockBtn" onclick="submitPassword()">Fortsätt</button>
+      <p class="muted" style="margin-top:16px;font-size:.95rem">Har du inte lösenordet? Fråga den som delade länken.</p>
+    </div>
+
+    <!-- CAPTCHA-grind före röstning -->
+    <div id="captchaView" class="card hidden" style="max-width:520px;margin:30px auto;text-align:center">
+      <p class="muted" id="captchaQ" style="font-weight:700"></p>
       <h2>Är du en människa?</h2>
       <div class="sub">Skriv tecknen i bilden för att börja rösta.</div>
-      <div id="captchaImg" style="background:#fff;border-radius:12px;padding:12px;display:inline-block;min-height:64px"></div>
-      <div class="row" style="justify-content:center;margin-top:6px">
+      <div id="captchaImg" style="background:#fff;border-radius:14px;padding:14px;display:inline-block;min-height:70px"></div>
+      <div class="row" style="justify-content:center;margin-top:10px">
         <button class="btn ghost sm" type="button" onclick="loadCaptcha()">↻ Ny bild</button>
       </div>
-      <input type="text" id="captchaInput" autocomplete="off" autocapitalize="off" spellcheck="false"
-             placeholder="Skriv koden här" style="text-align:center;margin-top:12px"
+      <input type="text" id="captchaInput" aria-label="Koden i bilden" autocomplete="off" autocapitalize="off" spellcheck="false"
+             placeholder="Skriv koden här" style="text-align:center;margin-top:16px"
              onkeydown="if(event.key==='Enter')verifyCaptcha()">
       <div class="spacer"></div>
-      <button class="btn" onclick="verifyCaptcha()">Fortsätt</button>
+      <button class="btn big" onclick="verifyCaptcha()">Fortsätt</button>
     </div>
 
     <div id="surveyView" class="hidden">
-      <div class="hero">
+      <div class="hero compact">
         <h1 id="qTitle">Laddar…</h1>
         <p id="qDesc"></p>
+      <p id="qBy" class="poll-by hidden"></p>
         <div class="datechip" id="dateChip"></div>
       </div>
 
-      <p class="center muted" style="margin-bottom:14px">Vilket alternativ är viktigast? Klicka för att rösta.</p>
+      <p class="vote-hint">Välj ett av två — klicka på det du tycker väger tyngst. Nästa par kommer direkt.</p>
 
       <div class="versus" id="versus">
-        <div class="choice" id="left"  onclick="pick('left')"><span></span><span class="kbd">← vänster</span></div>
+        <div class="choice" id="left"  onclick="pick('left')"  role="button" tabindex="0" onkeydown="if(event.key==='Enter'){event.preventDefault();pick('left')}"><span></span><span class="kbd">← piltangent vänster</span></div>
         <div class="vs">VS</div>
-        <div class="choice" id="right" onclick="pick('right')"><span></span><span class="kbd">höger →</span></div>
+        <div class="choice" id="right" onclick="pick('right')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'){event.preventDefault();pick('right')}"><span></span><span class="kbd">piltangent höger →</span></div>
       </div>
+
+      <p class="center vote-count" id="voteCount"></p>
 
       <div class="tools">
         <button class="btn ghost" onclick="skip()">Kan inte välja ⏭</button>
@@ -71,23 +93,21 @@
         <a class="btn ghost" href="results" id="resultsLink">Se resultat →</a>
       </div>
 
-      <!-- Suggest box -->
-      <div id="suggestBox" class="card hidden" style="margin-top:18px">
+      <!-- Förslagsruta -->
+      <div id="suggestBox" class="card hidden" style="margin-top:24px">
         <h2>Lägg till ett förslag</h2>
-        <div class="sub">Förslaget granskas av en moderator innan det blir röstbart.</div>
+        <div class="sub">Förslaget granskas av den som skapat omröstningen innan det blir röstbart.</div>
         <textarea id="suggestText" maxlength="280" placeholder="Beskriv din utmaning / idé i en mening…"></textarea>
-        <div class="row" style="margin-top:10px">
+        <div class="row" style="margin-top:14px">
           <button class="btn accent" onclick="submitSuggest()">Skicka in</button>
           <button class="btn ghost" onclick="closeSuggest()">Avbryt</button>
         </div>
       </div>
-
-      <p class="center muted" id="voteCount" style="margin-top:22px"></p>
     </div>
 
     <div id="empty" class="card center hidden">
       <h2>Inga aktiva omröstningar just nu</h2>
-      <p class="muted">Kom tillbaka snart, eller skapa en i <a href="admin">admin</a>.</p>
+      <p class="muted">Kom tillbaka snart, eller skapa en egen under <a href="skapa">Skapa/Ändra</a>.</p>
     </div>
   </main>
 

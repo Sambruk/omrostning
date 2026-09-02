@@ -4,9 +4,10 @@ const crypto = require('node:crypto');
 const QRCode = require('qrcode');
 const svgCaptcha = require('svg-captcha');
 
-const { pool, init, migrate } = require('./db');
+const { pool, init, migrate, newSlug } = require('./db');
 const { decorate, choosePair } = require('./scoring');
-const { login, requireAdmin, issueHuman, checkHuman, issueUser, requireUser } = require('./auth');
+const { login, requireAdmin, issueHuman, checkHuman, issueUser, requireUser,
+        verify, bearer, hashSecret, verifySecret, issuePoll, checkPoll } = require('./auth');
 const { sendMagicLink } = require('./mailer');
 
 const app = express();
@@ -21,6 +22,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use('/css', express.static(path.join(PUBLIC_DIR, 'css')));
 app.use('/js', express.static(path.join(PUBLIC_DIR, 'js')));
 app.use('/assets', express.static(path.join(PUBLIC_DIR, 'assets')));
+app.get('/favicon.ico', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'assets', 'favicon.ico')));
 
 const sendPage = (file) => (req, res) => res.sendFile(path.join(PUBLIC_DIR, file));
 app.get('/', sendPage('index.html'));
@@ -28,6 +30,7 @@ app.get('/results', sendPage('results.html'));
 app.get('/admin', sendPage('admin.html'));
 app.get('/share', sendPage('share.html'));
 app.get('/skapa', sendPage('skapa.html'));
+app.get('/sa-funkar-det', sendPage('sa-funkar-det.html'));
 
 // Public-facing base URL as seen through the reverse proxy (works on any domain).
 function publicBase(req) {
@@ -42,14 +45,26 @@ const wrap = (fn) => (req, res) => fn(req, res).catch((err) => {
   res.status(500).json({ error: 'Internal error' });
 });
 
+// Avsändaren är fritext som skaparen väljer själv (namn eller organisation) och
+// visas för deltagarna. Trimmas och kapas — den ska rymmas under rubriken.
+const label = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 80);
+
 // Parse a batch of ideas. Accepts an array, or a string where ideas are
 // separated by a BLANK line — so a single idea may span several lines.
+// Max 200 alternativ per anrop — nog för alla rimliga fall, och sätter tak för
+// hur mycket en enda begäran kan skriva till databasen.
+const MAX_IDEAS_PER_REQUEST = 200;
 function parseIdeas(input) {
   const list = Array.isArray(input)
     ? input.map((s) => String(s))
     : String(input || '').split(/\n[ \t]*\n+/);
-  return list.map((s) => s.replace(/\s+$/, '').replace(/^\s+/, '')).filter(Boolean);
+  return list.map((s) => s.replace(/\s+$/, '').replace(/^\s+/, ''))
+    .filter(Boolean).slice(0, MAX_IDEAS_PER_REQUEST);
 }
+
+// Rubriken visas i stora bokstäver för deltagarna — den behöver inte vara en roman.
+const MAX_TITLE = 300;
+const title_ = (t) => String(t).trim().slice(0, MAX_TITLE);
 
 // ---------- Anti-abuse: CAPTCHA, rate-limit, human gate ----------
 
@@ -90,6 +105,93 @@ function requireHuman(req, res, next) {
 
 const canonPair = (a, b) => `${Math.min(a, b)}-${Math.max(a, b)}`;
 
+// ---------- Delningsnyckel (slug) ----------
+
+// Publika rutter adresseras med slug (`?q=k7p2m9x4qd`). De gamla löpnumren
+// fungerar fortfarande — utdelade QR-koder och länkar ska inte sluta gälla.
+// Middleware:t skriver om req.params.id till det numeriska id:t, så resten av
+// koden kan fortsätta arbeta med ett id.
+function resolveQuestion(req, res, next) {
+  const key = String(req.params.id || '');
+  if (/^\d+$/.test(key)) return next();
+  if (!/^[a-z2-9]{6,32}$/.test(key)) return res.status(404).json({ error: 'Not found' });
+  pool.query(`SELECT id FROM questions WHERE slug = $1`, [key])
+    .then(({ rows }) => {
+      if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+      req.params.id = String(rows[0].id);
+      next();
+    })
+    .catch((err) => { console.error(err); res.status(500).json({ error: 'Internal error' }); });
+}
+
+// Skapa en slug som inte krockar med en befintlig.
+async function uniqueSlug() {
+  for (let i = 0; i < 10; i++) {
+    const slug = newSlug();
+    const { rows } = await pool.query(`SELECT 1 FROM questions WHERE slug = $1`, [slug]);
+    if (!rows.length) return slug;
+  }
+  throw new Error('Could not generate a unique slug');
+}
+
+// ---------- Per-poll access password ----------
+
+// Never let the stored hash leave the server; expose only a has_password flag.
+function publicQuestion(row) {
+  if (!row) return row;
+  const { access_password, ...rest } = row;
+  return { ...rest, has_password: !!access_password };
+}
+
+async function pollSecret(qid) {
+  const { rows } = await pool.query(`SELECT access_password FROM questions WHERE id = $1`, [qid]);
+  return rows[0] ? rows[0].access_password : undefined;
+}
+
+const pollTokenFrom = (req) => req.headers['x-poll-token'] || (req.body && req.body.poll) || '';
+
+// Gate for a password-protected poll: voting, suggesting and results all need
+// the pass issued by POST /api/questions/:id/access.
+function requirePollAccess(req, res, next) {
+  pollSecret(req.params.id).then((secret) => {
+    if (secret === undefined) return res.status(404).json({ error: 'Not found' });
+    if (!secret) return next();
+    if (checkPoll(pollTokenFrom(req), req.params.id)) return next();
+    return res.status(401).json({ error: 'Omröstningen är lösenordsskyddad', locked: true });
+  }).catch((err) => { console.error(err); res.status(500).json({ error: 'Internal error' }); });
+}
+
+// Slow down password guessing: 12 attempts per minute and IP.
+const accessRl = new Map();
+function accessLimit(req, res, next) {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  let rec = accessRl.get(ip);
+  if (!rec || rec.reset < now) { rec = { count: 0, reset: now + 60000 }; accessRl.set(ip, rec); }
+  if (++rec.count > 12) return res.status(429).json({ error: 'För många försök — vänta en minut.' });
+  next();
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, rec] of accessRl) if (rec.reset < now) accessRl.delete(ip);
+}, 1000 * 60 * 5).unref();
+
+// Does this request come from someone who may bypass the password (the poll's
+// owner, or the super-admin for an official poll)?
+async function isManager(req, qid) {
+  const p = verify(bearer(req));
+  if (!p) return false;
+  if (p.role === 'admin') {
+    const { rows } = await pool.query(`SELECT 1 FROM questions WHERE id = $1 AND owner_id IS NULL`, [qid]);
+    return rows.length > 0;
+  }
+  if (p.role === 'user' && p.uid) {
+    const { rows } = await pool.query(`SELECT 1 FROM questions WHERE id = $1 AND owner_id = $2`, [qid, p.uid]);
+    return rows.length > 0;
+  }
+  return false;
+}
+
 // =====================================================================
 // PUBLIC API
 // =====================================================================
@@ -129,20 +231,46 @@ app.get('/api/qr.svg', wrap(async (req, res) => {
 // NOTE: there is intentionally NO endpoint that lists/enumerates polls.
 // Every poll is reachable only via its own shared link (?q=ID) — no catalog.
 
-// One question's metadata.
-app.get('/api/questions/:id', wrap(async (req, res) => {
+// One question's metadata. For a password-protected poll nothing is revealed
+// (not even the title) until the visitor has unlocked it.
+app.get('/api/questions/:id', resolveQuestion, wrap(async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT id, title, description, status, allow_suggestions FROM questions WHERE id = $1`,
+    `SELECT id, slug, title, description, status, allow_suggestions, creator_label, access_password
+       FROM questions WHERE id = $1`,
     [req.params.id]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  res.json(rows[0]);
+  // Utkast är "dolt" enligt gränssnittet — då ska det också vara dolt utåt.
+  // Skaparen och super-admin når sitt eget utkast för förhandsgranskning.
+  if (rows[0].status === 'draft' && !await isManager(req, req.params.id)) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  if (rows[0].access_password && !checkPoll(pollTokenFrom(req), req.params.id)) {
+    return res.status(401).json({ error: 'Omröstningen är lösenordsskyddad', locked: true });
+  }
+  res.json(publicQuestion(rows[0]));
+}));
+
+// Unlock a password-protected poll -> 12h pass for voting and results.
+// The creator (or the super-admin, for official polls) unlocks without typing it.
+app.post('/api/questions/:id/access', accessLimit, resolveQuestion, wrap(async (req, res) => {
+  const qid = req.params.id;
+  const secret = await pollSecret(qid);
+  if (secret === undefined) return res.status(404).json({ error: 'Not found' });
+  if (!secret) return res.json({ token: issuePoll(qid), open: true });
+  const password = String((req.body || {}).password || '');
+  if (!password && await isManager(req, qid)) return res.json({ token: issuePoll(qid), manager: true });
+  if (!verifySecret(password, secret)) return res.status(401).json({ error: 'Fel lösenord' });
+  res.json({ token: issuePoll(qid) });
 }));
 
 // Next pair to vote on — excludes pairs this voter has already decided/skipped.
-app.get('/api/questions/:id/pair', wrap(async (req, res) => {
+app.get('/api/questions/:id/pair', resolveQuestion, requirePollAccess, wrap(async (req, res) => {
   const qid = req.params.id;
   const voter = req.query.voter || null;
+  const { rows: qs } = await pool.query(`SELECT status FROM questions WHERE id = $1`, [qid]);
+  if (!qs[0]) return res.status(404).json({ error: 'Not found' });
+  if (qs[0].status !== 'active') return res.json({ pair: null, closed: true });
   const { rows: ideas } = await pool.query(
     `SELECT * FROM ideas WHERE question_id = $1 AND status = 'approved'`, [qid]
   );
@@ -188,9 +316,15 @@ app.get('/api/questions/:id/pair', wrap(async (req, res) => {
 }));
 
 // Cast a vote (or skip). Gated by rate-limit + CAPTCHA "human" token.
-app.post('/api/questions/:id/vote', rateLimit, requireHuman, wrap(async (req, res) => {
+app.post('/api/questions/:id/vote', rateLimit, resolveQuestion, requirePollAccess, requireHuman, wrap(async (req, res) => {
   const qid = req.params.id;
   const { winner_id, loser_id, left_id, right_id, skipped, voter } = req.body || {};
+
+  const { rows: qs } = await pool.query(`SELECT status FROM questions WHERE id = $1`, [qid]);
+  if (!qs[0]) return res.status(404).json({ error: 'Not found' });
+  if (qs[0].status !== 'active') {
+    return res.status(403).json({ error: 'Omröstningen är stängd', closed: true });
+  }
 
   if (skipped) {
     await pool.query(
@@ -248,7 +382,7 @@ app.post('/api/questions/:id/vote', rateLimit, requireHuman, wrap(async (req, re
 }));
 
 // Submit a new idea -> goes to moderation queue (pending). Gated by CAPTCHA.
-app.post('/api/questions/:id/ideas', requireHuman, wrap(async (req, res) => {
+app.post('/api/questions/:id/ideas', resolveQuestion, requirePollAccess, requireHuman, wrap(async (req, res) => {
   const text = (req.body && req.body.text || '').trim();
   if (!text) return res.status(400).json({ error: 'text required' });
   if (text.length > 280) return res.status(400).json({ error: 'För långt (max 280 tecken)' });
@@ -268,7 +402,7 @@ app.post('/api/questions/:id/ideas', requireHuman, wrap(async (req, res) => {
 }));
 
 // Public ranked results.
-app.get('/api/questions/:id/results', wrap(async (req, res) => {
+app.get('/api/questions/:id/results', resolveQuestion, requirePollAccess, wrap(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT * FROM ideas WHERE question_id = $1 AND status = 'approved'`,
     [req.params.id]
@@ -281,14 +415,83 @@ app.get('/api/questions/:id/results', wrap(async (req, res) => {
   res.json({ ideas, totalVotes: totalVotes.rows[0].c });
 }));
 
+// Apply a password change from a PATCH body. Three states: field absent =
+// unchanged, empty string/null = remove the password, a string = set it.
+async function applyPassword(qid, body, current) {
+  if (!Object.prototype.hasOwnProperty.call(body, 'password')) return current;
+  const value = body.password ? hashSecret(String(body.password)) : null;
+  const { rows } = await pool.query(
+    `UPDATE questions SET access_password = $2 WHERE id = $1 RETURNING *`, [qid, value]);
+  return rows[0] || current;
+}
+
 // =====================================================================
 // ADMIN API
 // =====================================================================
 
-app.post('/api/admin/login', wrap(async (req, res) => {
+// Inloggningen mot /admin får inte gå att gissa i obegränsad takt.
+// 8 försök per minut och IP; räknaren nollställs vid lyckad inloggning.
+const loginRl = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, rec] of loginRl) if (rec.reset < now) loginRl.delete(ip);
+}, 1000 * 60 * 5).unref();
+function loginLimit(req, res, next) {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  let rec = loginRl.get(ip);
+  if (!rec || rec.reset < now) { rec = { count: 0, reset: now + 60000 }; loginRl.set(ip, rec); }
+  if (++rec.count > 8) {
+    return res.status(429).json({ error: 'För många inloggningsförsök — vänta en minut.' });
+  }
+  next();
+}
+
+app.post('/api/admin/login', loginLimit, wrap(async (req, res) => {
   const token = login((req.body || {}).password);
   if (!token) return res.status(401).json({ error: 'Fel lösenord' });
+  loginRl.delete(req.ip || 'unknown');
   res.json({ token });
+}));
+
+// Aggregated usage statistics for the super-admin. Deliberately contains ONLY
+// counts — never poll titles, e-mail addresses, owners or anyone's results.
+// Members' polls stay private; this says how much the service is used, not by whom.
+app.get('/api/admin/stats', requireAdmin, wrap(async (req, res) => {
+  const { rows: totals } = await pool.query(`
+    SELECT
+      (SELECT count(*) FROM users)                                              AS accounts,
+      (SELECT count(*) FROM users WHERE created_at > now() - interval '30 days') AS accounts_30d,
+      (SELECT count(*) FROM users WHERE last_login_at > now() - interval '30 days') AS accounts_active_30d,
+      (SELECT count(*) FROM questions)                                          AS polls,
+      (SELECT count(*) FROM questions WHERE owner_id IS NULL)                   AS polls_official,
+      (SELECT count(*) FROM questions WHERE owner_id IS NOT NULL)               AS polls_member,
+      (SELECT count(*) FROM questions WHERE created_at > now() - interval '30 days') AS polls_30d,
+      (SELECT count(*) FROM questions WHERE status = 'active')                  AS polls_active,
+      (SELECT count(*) FROM questions WHERE status = 'closed')                  AS polls_closed,
+      (SELECT count(*) FROM questions WHERE status = 'draft')                   AS polls_draft,
+      (SELECT count(*) FROM questions WHERE access_password IS NOT NULL)        AS polls_protected,
+      (SELECT count(*) FROM ideas)                                              AS ideas,
+      (SELECT count(*) FROM ideas WHERE source = 'user')                        AS ideas_from_participants,
+      (SELECT count(*) FROM ideas WHERE status = 'pending')                     AS ideas_pending,
+      (SELECT count(*) FROM votes WHERE skipped = FALSE)                        AS votes,
+      (SELECT count(*) FROM votes WHERE skipped = TRUE)                         AS votes_skipped,
+      (SELECT count(*) FROM votes WHERE skipped = FALSE AND created_at > now() - interval '30 days') AS votes_30d,
+      (SELECT count(DISTINCT voter) FROM votes WHERE voter IS NOT NULL)         AS voters,
+      (SELECT min(created_at)::date FROM questions)                             AS first_poll_at
+  `);
+  // Aktivitet per vecka, tolv veckor bakåt — bara antal, inget om innehållet.
+  const { rows: weekly } = await pool.query(`
+    SELECT to_char(w.wk, 'IYYY-"v"IW') AS week, w.wk::date AS starts,
+      (SELECT count(*) FROM users u     WHERE date_trunc('week', u.created_at) = w.wk) AS accounts,
+      (SELECT count(*) FROM questions q WHERE date_trunc('week', q.created_at) = w.wk) AS polls,
+      (SELECT count(*) FROM votes v     WHERE date_trunc('week', v.created_at) = w.wk
+                                          AND v.skipped = FALSE)                       AS votes
+      FROM generate_series(date_trunc('week', now()) - interval '11 weeks',
+                           date_trunc('week', now()), interval '1 week') AS w(wk)
+     ORDER BY w.wk
+  `);
+  res.json({ totals: totals[0], weekly, generated_at: new Date().toISOString() });
 }));
 
 // Admin only manages the OFFICIAL polls it created (owner_id IS NULL),
@@ -316,16 +519,26 @@ app.get('/api/admin/questions', requireAdmin, wrap(async (req, res) => {
       GROUP BY q.id
       ORDER BY q.created_at DESC`
   );
-  res.json(rows);
+  res.json(rows.map(publicQuestion));
+}));
+
+// One official poll incl. has_password (used by the settings panel).
+app.get('/api/admin/questions/:id', requireAdmin, wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT * FROM questions WHERE id = $1 AND owner_id IS NULL`, [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  res.json(publicQuestion(rows[0]));
 }));
 
 app.post('/api/admin/questions', requireAdmin, wrap(async (req, res) => {
-  const { title, description, allow_suggestions, status, seeds } = req.body || {};
+  const { title, description, allow_suggestions, status, seeds, password, creator_label } = req.body || {};
   if (!title || !title.trim()) return res.status(400).json({ error: 'title required' });
   const { rows } = await pool.query(
-    `INSERT INTO questions (title, description, allow_suggestions, status)
-     VALUES ($1,$2,$3,$4) RETURNING *`,
-    [title.trim(), (description || '').trim(), allow_suggestions !== false, status || 'active']
+    `INSERT INTO questions (title, description, allow_suggestions, status, access_password, creator_label, slug)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [title_(title), (description || '').trim().slice(0, 1000), allow_suggestions !== false,
+     status || 'active', password ? hashSecret(String(password)) : null, label(creator_label),
+     await uniqueSlug()]
   );
   const q = rows[0];
   const seedList = parseIdeas(seeds);
@@ -335,24 +548,27 @@ app.post('/api/admin/questions', requireAdmin, wrap(async (req, res) => {
       [q.id, text.slice(0, 1000)]
     );
   }
-  res.json(q);
+  res.json(publicQuestion(q));
 }));
 
 app.patch('/api/admin/questions/:id', requireAdmin, wrap(async (req, res) => {
   if (!await isOfficialQuestion(req.params.id)) return res.status(404).json({ error: 'Not found' });
-  const { title, description, status, allow_suggestions } = req.body || {};
+  const { title, description, status, allow_suggestions, creator_label } = req.body || {};
   const { rows } = await pool.query(
     `UPDATE questions SET
        title = COALESCE($2, title),
        description = COALESCE($3, description),
        status = COALESCE($4, status),
-       allow_suggestions = COALESCE($5, allow_suggestions)
+       allow_suggestions = COALESCE($5, allow_suggestions),
+       creator_label = COALESCE($6, creator_label)
      WHERE id = $1 RETURNING *`,
-    [req.params.id, title, description, status,
-     typeof allow_suggestions === 'boolean' ? allow_suggestions : null]
+    [req.params.id, title ? title_(title) : null, description == null ? null : String(description).slice(0, 1000), status,
+     typeof allow_suggestions === 'boolean' ? allow_suggestions : null,
+     creator_label === undefined ? null : label(creator_label)]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  res.json(rows[0]);
+  const updated = await applyPassword(req.params.id, req.body || {}, rows[0]);
+  res.json(publicQuestion(updated));
 }));
 
 app.delete('/api/admin/questions/:id', requireAdmin, wrap(async (req, res) => {
@@ -541,35 +757,49 @@ app.get('/api/user/questions', requireUser, wrap(async (req, res) => {
       ORDER BY q.created_at DESC`,
     [req.user.uid]
   );
-  res.json(rows);
+  res.json(rows.map(publicQuestion));
+}));
+
+// One of my polls incl. has_password (used by the settings panel).
+app.get('/api/user/questions/:id', requireUser, wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT * FROM questions WHERE id = $1 AND owner_id = $2`, [req.params.id, req.user.uid]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  res.json(publicQuestion(rows[0]));
 }));
 
 app.post('/api/user/questions', requireUser, wrap(async (req, res) => {
-  const { title, description, allow_suggestions, status, seeds } = req.body || {};
+  const { title, description, allow_suggestions, status, seeds, password, creator_label } = req.body || {};
   if (!title || !title.trim()) return res.status(400).json({ error: 'title required' });
   const { rows } = await pool.query(
-    `INSERT INTO questions (owner_id, title, description, allow_suggestions, status)
-     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-    [req.user.uid, title.trim(), (description || '').trim(), allow_suggestions !== false, status || 'active']
+    `INSERT INTO questions (owner_id, title, description, allow_suggestions, status, access_password, creator_label, slug)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [req.user.uid, title_(title), (description || '').trim().slice(0, 1000), allow_suggestions !== false,
+     status || 'active', password ? hashSecret(String(password)) : null, label(creator_label),
+     await uniqueSlug()]
   );
   const q = rows[0];
   for (const text of parseIdeas(seeds)) {
     await pool.query(`INSERT INTO ideas (question_id, text, status, source) VALUES ($1,$2,'approved','seed')`,
       [q.id, text.slice(0, 1000)]);
   }
-  res.json(q);
+  res.json(publicQuestion(q));
 }));
 
 app.patch('/api/user/questions/:id', requireUser, wrap(async (req, res) => {
   if (!await ownsQuestion(req.params.id, req.user.uid)) return res.status(404).json({ error: 'Not found' });
-  const { title, description, status, allow_suggestions } = req.body || {};
+  const { title, description, status, allow_suggestions, creator_label } = req.body || {};
   const { rows } = await pool.query(
     `UPDATE questions SET title = COALESCE($2, title), description = COALESCE($3, description),
-       status = COALESCE($4, status), allow_suggestions = COALESCE($5, allow_suggestions)
+       status = COALESCE($4, status), allow_suggestions = COALESCE($5, allow_suggestions),
+       creator_label = COALESCE($6, creator_label)
      WHERE id = $1 RETURNING *`,
-    [req.params.id, title, description, status, typeof allow_suggestions === 'boolean' ? allow_suggestions : null]
+    [req.params.id, title ? title_(title) : null, description == null ? null : String(description).slice(0, 1000), status,
+     typeof allow_suggestions === 'boolean' ? allow_suggestions : null,
+     creator_label === undefined ? null : label(creator_label)]
   );
-  res.json(rows[0]);
+  const updated = await applyPassword(req.params.id, req.body || {}, rows[0]);
+  res.json(publicQuestion(updated));
 }));
 
 app.delete('/api/user/questions/:id', requireUser, wrap(async (req, res) => {

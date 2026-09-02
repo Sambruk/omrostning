@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Duellen — så funkar det</title>
+  <link rel="icon" href="assets/favicon.ico" sizes="32x32">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><a href="."><img src="assets/duellen-logo.png" class="logo" alt="Sambruk Duellen"></a></div>
+    <nav class="topnav">
+      <a href=".">Rösta</a>
+      <a href="results">Resultat</a>
+      <a href="sa-funkar-det" class="active">Så funkar det</a>
+      <a href="skapa">Skapa/Ändra</a>
+      <button class="theme-btn" onclick="toggleTheme()" title="Byt mellan ljust och mörkt läge" aria-label="Byt tema">◐</button>
+    </nav>
+  </div>
+
+  <main class="wrap">
+    <div class="hero">
+      <h1>Så fungerar Duellen</h1>
+      <p>Duellen är ett omröstningsverktyg där du bara jämför två förslag i taget.
+         Det tar några sekunder att svara — och tillsammans skapar alla svar en rangordnad lista.</p>
+      <div class="datechip" id="dateChip"></div>
+    </div>
+
+    <h2 style="margin:8px 4px 16px">Att rösta — tre steg</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <h3>Öppna länken</h3>
+        <p>Du får en länk eller en QR-kod av den som startat omröstningen. Ingen inloggning behövs för att rösta.</p>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <h3>Välj ett av två</h3>
+        <p>Två alternativ visas sida vid sida. Klicka på det du tycker är viktigast — eller använd piltangenterna.</p>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <h3>Fortsätt så länge du vill</h3>
+        <p>Ett nytt par dyker upp direkt. Rösta så många gånger du orkar och sluta när du vill — alla röster räknas.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:26px">
+      <h2>Bra att veta när du röstar</h2>
+      <p><strong>Kan inte välja?</strong> Klicka på <em>Kan inte välja</em> (eller mellanslag) så hoppar du vidare
+         utan att någon vinner. Det är ett fullgott svar.</p>
+      <p><strong>Saknas ett förslag?</strong> Om den som skapat omröstningen tillåter det kan du lägga till ett eget
+         förslag. Det granskas innan det börjar dyka upp i dueller.</p>
+      <p><strong>Bildkoden i början</strong> finns bara för att hålla robotar borta. Den visas en gång, sedan får du rösta fritt.</p>
+    </div>
+
+    <h2 style="margin:30px 4px 16px">Att skapa en egen omröstning</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <h3>Logga in med e-post</h3>
+        <p>Du får en inloggningslänk skickad till din inkorg — inget lösenord att komma ihåg.</p>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <h3>Skriv fråga och alternativ</h3>
+        <p>Formulera en fråga och lägg in de alternativ som ska ställas mot varandra — skilj dem åt med en tom rad. Fler kan fyllas på när som helst.</p>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <h3>Dela länk eller QR</h3>
+        <p>Sprid länken i chatten eller visa QR-koden på duk. Vill du hålla omröstningen intern kan du sätta ett
+           lösenord som deltagarna måste skriva in. Resultatet uppdateras löpande medan folk röstar.</p>
+      </div>
+    </div>
+
+    <div class="center" style="margin:28px 0 10px">
+      <a class="btn big" href="skapa">Skapa en egen omröstning →</a>
+    </div>
+
+    <h2 style="margin:36px 4px 8px">Vanliga frågor</h2>
+
+    <div class="faq">
+      <h3>Vad betyder poängen i resultatlistan?</h3>
+      <p>Poängen är en uppskattning av hur stor chansen är att förslaget vinner mot ett slumpmässigt valt annat
+         förslag — 0 betyder att det alltid förlorar, 100 att det alltid vinner. Uträkningen väger in hur många
+         dueller förslaget hunnit vara med i, så nya förslag inte far iväg på en enda röst.</p>
+    </div>
+    <div class="faq">
+      <h3>Måste alla rösta lika många gånger?</h3>
+      <p>Nej. Verktyget väljer par så att alla förslag får ungefär lika mycket uppmärksamhet, oavsett hur
+         mycket var och en röstar. Även ett fåtal röster ger ett användbart resultat.</p>
+    </div>
+    <div class="faq">
+      <h3>Är röstningen anonym?</h3>
+      <p>Ja. Vi frågar inte efter namn eller e-post för att rösta. Webbläsaren får ett slumpmässigt id så att
+         du inte ska få samma par två gånger — det säger inget om vem du är. Bara den som <em>skapar</em> en
+         omröstning anger sin e-postadress, för att kunna logga in.</p>
+    </div>
+    <div class="faq">
+      <h3>Kan någon hitta min omröstning utan att ha fått länken?</h3>
+      <p>Nej. Varje omröstning har en egen slumpad nyckel i länken (t.ex. <em>?q=k7p2m9x4qd</em>),
+         som inte går att gissa eller räkna sig fram till. Det finns heller ingen lista över
+         omröstningar någonstans i tjänsten. Vill du dessutom styra vilka som får rösta sätter du
+         ett lösenord.</p>
+    </div>
+    <div class="faq">
+      <h3>Kan jag begränsa vilka som får rösta?</h3>
+      <p>Ja. När du skapar en omröstning kan du sätta ett <strong>lösenord</strong> — då måste deltagarna
+         skriva in det både för att rösta och för att se resultatet, och inget av innehållet visas innan dess.
+         Dela lösenordet separat från länken, till exempel muntligt i mötet. Lösenordet kan sättas, ändras
+         eller tas bort när som helst under <em>Inställningar</em>. Du själv kommer in utan att skriva det,
+         så länge du är inloggad.</p>
+    </div>
+    <div class="faq">
+      <h3>Kan jag se resultatet medan omröstningen pågår?</h3>
+      <p>Ja, resultatsidan uppdateras automatiskt. Den som skapat omröstningen kan också ladda ner allt
+         som CSV för egen analys.</p>
+    </div>
+    <div class="faq">
+      <h3>Varför jämföra två i taget i stället för att sätta betyg?</h3>
+      <p>Att välja mellan två saker är lätt och går snabbt — att rangordna tjugo förslag är svårt och tar tid.
+         Många små jämförelser ger en stabilare rangordning, och metoden är svårare att fylla i på slentrian.</p>
+    </div>
+
+    <div class="card" style="margin-top:30px">
+      <h2>Hittat ett fel — eller kört fast?</h2>
+      <p>Hör av dig, så tittar vi på det. Beskriv gärna vad du gjorde och vilken omröstning det gäller
+         (klistra in länken), så går det snabbare att hjälpa dig.</p>
+      <p style="margin-top:16px">
+        <a class="btn" href="mailto:hjalp@sambruksupport.se?subject=Duellen">Mejla hjalp@sambruksupport.se</a>
+      </p>
+    </div>
+
+    <div class="card about-org" style="margin-top:34px">
+      <span class="eyebrow gray">Vem driver tjänsten</span>
+      <h2>Om Sambruk</h2>
+      <p>Duellen drivs av <strong>Sambruk</strong> — en medlemsorganisation där svenska offentliga organisationer
+         samverkar för att utveckla digitala tjänster och dela lösningar med varandra. Tjänsten är byggd med
+         öppen källkod och kostar inget att använda.</p>
+      <p style="margin-top:14px">
+        <a href="https://sambruk.se" target="_blank" rel="noopener">Läs mer på sambruk.se →</a>
+      </p>
+    </div>
+  </main>
+
+  <script src="js/common.js"></script>
+  <script>document.getElementById('dateChip').textContent = todayStr();</script>
+</body>
+</html>
